@@ -1,0 +1,13 @@
+judis.nic.in is the government website that distributes supreme court and high
+court judgments. However, recently the website changed significantly in terms
+of how to download documents. Earlier it used a stable and structured URL for
+all their judgments. Now these URLs do not work and it has become all state
+based. Judgments can only be obtained by searching which gives you a state
+variable. This variable combined with the result number gives you the actual
+judgment.
+
+These scripts use the date search form for downloading judgments.
+
+You will need python for these scripts. And they are tested only on Gnu/Linux.
+
+supremecourt.py: main script for downloading supreme court judgments.
