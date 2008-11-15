@@ -47,25 +47,40 @@ class WebformParser(HTMLParser):
 	    self.linkname             = None
 	    self.linkdata             = ''
 
+def mk_dir(dirname):
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
+
 class Judis:
     def __init__(self, datadir):
-        self.datadir    = datadir
-        self.cookiefile = tempfile.NamedTemporaryFile()
-        self.webformUrl = 'http://judis.nic.in/supremecourt/WebForm2.aspx'
-        self.dateqryUrl = 'http://judis.nic.in/supremecourt/DateQry.aspx' 
+        self.datadir     = datadir
+	statdir          = '%s/stats' % datadir
+        mk_dir(statdir)
+
+	self.wgetlog     = '%s/stats/wgetlog' % datadir
+
+        self.cookiefile  = tempfile.NamedTemporaryFile()
+        self.webformUrl  = 'http://judis.nic.in/supremecourt/WebForm2.aspx'
+        self.dateqryUrl  = 'http://judis.nic.in/supremecourt/DateQry.aspx' 
         self.nextpageStr = 'Next Page'
         self.prevpageStr = 'Previous Page'
 
-    def sync(self, fromdate, todate):
+    def sync(self, fromdate, todate, relpath):
+        newdownloads = []
+        dirname = '%s/%s' % (self.datadir, relpath)
+        mk_dir(dirname)
+
         while fromdate <= todate:
             dateobj   = fromdate.date()
-            datedir   = '%s/%s' % (self.datadir, dateobj)
-            if not os.path.exists(datedir):
-                os.mkdir(datedir)
-            self.download_oneday(datedir, dateobj)
+            tmprel    = '%s/%s' % (relpath, dateobj)	    
+            datedir   = '%s/%s' % (self.datadir, tmprel)
+            mk_dir(datedir)
+            dls = self.download_oneday(tmprel, dateobj)
+	    newdownloads.extend(dls)
             fromdate += datetime.timedelta(days=1)
+        return newdownloads
 
-    def download_oneday(self, datedir, dateobj):
+    def download_oneday(self, relpath, dateobj):
         if DEBUG:
             print 'Downloading for the date %s' % dateobj
 
@@ -74,18 +89,25 @@ class Judis:
             mnth = '0%d' % dateobj.month
         else:
             mnth = '%d' % dateobj.month
+	    
+        if dateobj.day < 10:
+            day = '0%d' % dateobj.day
+        else:
+            day = '%d' % dateobj.day
+	    
         postdata = [('__VIEWSTATE', self.stateval), \
-                     ('ddlday1', dateobj.day), ('ddlmonth1', mnth),\
-                     ('ddlyear1', dateobj.year),('ddlday2', dateobj.day), \
+                     ('ddlday1', day), ('ddlmonth1', mnth),\
+                     ('ddlyear1', dateobj.year),('ddlday2', day), \
                      ('ddlmonth2', mnth),('ddlyear2', dateobj.year),\
                      ('ddlreport', 'A'), ('button', 'Submit')\
                     ]
 
         webpage  = self.download_webpage(postdata, self.dateqryUrl)
-        self.datequery_result(webpage, datedir, 0)
+        return self.datequery_result(webpage, relpath, 0)
         
-    def datequery_result(self, webpage, datedir, pagenum):
-        filehandle = open('%s/index_%d.html' % (datedir, pagenum), 'w')
+    def datequery_result(self, webpage, relpath, pagenum):
+        downloaded = []
+        filehandle = open('%s/%s/index_%d.html' % (self.datadir, relpath, pagenum), 'w')
         filehandle.write(webpage)
         filehandle.close()
 
@@ -100,9 +122,10 @@ class Judis:
         webformParser.feed(webpage)
 
         for header in webformParser.links.keys():
-            filepath = '%s/%s' % (datedir, re.sub('/', '|', header))
+	    filename = re.sub('/', '|', header)
+	    tmprel   = '%s/%s' % (relpath, filename)
+            filepath = '%s/%s' % (self.datadir, tmprel)
             if not os.path.exists(filepath) and re.search('Coram:', header) == None:
-                print header, webformParser.links[header]
                 linkinfo = self.parse_link(webformParser.links[header])
                 if linkinfo == None:
                     print 'Warn: Could not download %s. Link is %s' % (header, \
@@ -113,12 +136,16 @@ class Judis:
                         filehandle = open(filepath, 'w')
                         filehandle.write(webpage)
                         filehandle.close()
+			downloaded.append(tmprel)
         # download next page if it exists
         if self.nextpageStr in webformParser.links.keys():
             header = self.nextpageStr
             linkinfo = self.parse_link(webformParser.links[header])
             webpage = self.download_link(linkinfo)
-            self.datequery_result(webpage, datedir, pagenum+1)
+            nextdownloads = self.datequery_result(webpage, relpath, pagenum+1)
+	    downloaded.extend(nextdownloads)
+
+        return downloaded
 
     def extract_state(self, datequery):
         stateval = None
@@ -132,7 +159,7 @@ class Judis:
         argList = [\
                    '/usr/bin/wget','--output-document', '-', \
                    '--keep-session-cookies', '--save-cookies', \
-                   self.cookiefile.name,  \
+                   self.cookiefile.name,  '-a', self.wgetlog, \
                    'http://judis.nic.in/supremecourt/DateQry.aspx'\
                   ]
 
@@ -159,8 +186,9 @@ class Judis:
 
         argList = [\
                    '/usr/bin/wget', '--output-document', '-', \
-                   '--load-cookies', self.cookiefile.name,  '--post-data',\
-                   "'%s'" % encodedData, posturl\
+		   '-a', self.wgetlog, \
+                   '--load-cookies', self.cookiefile.name,  '--post-data', \
+                   "'%s'" % encodedData, posturl \
                   ]
         command = string.join(argList, ' ')
 
@@ -198,8 +226,9 @@ def to_datetime(datestr):
 
 if __name__ == '__main__':
     #initial values
-    fromdate = datetime.datetime.today() 
-    todate   = datetime.datetime.today()
+
+    fromdate = None
+    todate   = None
 
     progname = sys.argv[0]
     optlist, remlist = getopt.getopt(sys.argv[1:], 'p:t:T:h')
@@ -216,9 +245,17 @@ if __name__ == '__main__':
         print_usage(progname)
         sys.exit(0) 
 
+    if fromdate == None:
+        if todate == None:
+            todate   = datetime.datetime.today() 
+        fromdate = todate - datetime.timedelta(days = 7)
+    elif todate == None:
+        todate = fromdate + datetime.timedelta(days = 7)
+
     datadir = remlist[0]
     judis   = Judis(datadir)
-    judis.sync(fromdate, todate)
- 
-    #main(fromdate, todate)
-    #datequery_result(open('tmp', 'r').read(), None, None)
+    dls = judis.sync(fromdate, todate, 'judis.nic.in')
+
+    print 'NEW DOWNLOADS'
+    for dl in dls: 
+        print dl
