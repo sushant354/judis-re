@@ -60,7 +60,7 @@ class Judis:
 	self.wgetlog     = '%s/stats/wgetlog' % datadir
 
         self.cookiefile  = tempfile.NamedTemporaryFile()
-        self.webformUrl  = 'http://judis.nic.in/supremecourt/WebForm2.aspx'
+        self.webformUrl  = 'http://judis.nic.in/supremecourt/Chrseq.aspx'
         self.dateqryUrl  = 'http://judis.nic.in/supremecourt/DateQry.aspx' 
         self.nextpageStr = 'Next Page'
         self.prevpageStr = 'Previous Page'
@@ -125,7 +125,8 @@ class Judis:
 	    filename = re.sub('/', '|', header)
 	    tmprel   = '%s/%s' % (relpath, filename)
             filepath = '%s/%s' % (self.datadir, tmprel)
-            if not os.path.exists(filepath) and re.search('Coram:', header) == None:
+            if not os.path.exists(filepath) and re.search('Coram:|Click here', header) == None:
+                print header
                 linkinfo = self.parse_link(webformParser.links[header])
                 if linkinfo == None:
                     print 'Warn: Could not download %s. Link is %s' % (header, \
@@ -207,7 +208,7 @@ class Judis:
         return self.download_webpage(postdata, self.webformUrl)
 
 def print_usage(progname):
-    print 'Usage: %s [-t fromdate] [-T todate] datadir\n' % progname
+    print 'Usage: %s [-t fromdate (DD-MM-YYYY)] [-T todate (DD-MM-YYYY)] datadir\n' % progname
     print 'The program will download supreme court judgments from judis'
     print 'and will place in a specified directory. Judgments will be'
     print 'placed into directories named by dates. If fromdate or todate'
