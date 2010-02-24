@@ -16,26 +16,37 @@ class Lobis(utils.BaseCourt):
     def get_cookies(self):
         argList = [\
                    '/usr/bin/wget','--output-document', '-', \
+                   '--tries=%d' % self.maxretries, \
                    '--keep-session-cookies', '--save-cookies', \
                    self.cookiefile.name,  '-a', self.wgetlog, \
+                   '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
                    self.cookieurl \
                   ]
         p = subprocess.Popen(argList, stdout=subprocess.PIPE)
         webpage = utils.read_forked_proc(p)
 
+    def date_in_form(self, dateobj):
+        return [('jday',   utils.pad_zero(dateobj.day)), \
+                ('jmonth', utils.pad_zero(dateobj.month)), \
+                ('jyear',  utils.pad_zero(dateobj.year)) \
+               ]
+
     def download_oneday(self, relpath, dateobj):
-        #self.get_cookies()
+        self.get_cookies()
         todate   = utils.dateobj_to_str(dateobj, '/')
         fromdate  = todate
 
         if self.DEBUG:
             print 'DATE %s' % todate
-      
-        postdata = [('juddt', todate), ('Submit', 'Submit')]
+     
+        postdata = self.date_in_form(dateobj) 
+        postdata.append(('Submit', 'Submit'))
         encodedData  = urllib.urlencode(postdata)
 
         arglist =  [\
                    '/usr/bin/wget', '--output-document', '-', \
+                   '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                   '--tries=%d' % self.maxretries, \
                    '--keep-session-cookies', '--save-cookies', \
                    self.cookiefile.name,  '-a', self.wgetlog, \
                    '--post-data', encodedData, \
@@ -52,6 +63,8 @@ class Lobis(utils.BaseCourt):
             url      = '%s/%s' % (self.courturl, link)
 
         arglist  = ['/usr/bin/wget',  '-a', self.wgetlog,
+                    '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                    '--tries=%d' % self.maxretries, \
                     '--load-cookies', self.cookiefile.name, \
                     '--output-document', filepath, url]
         p        = subprocess.Popen(arglist)
@@ -80,19 +93,25 @@ class Lobis(utils.BaseCourt):
               re.search('PREV|NEXT', linktitle):
                 tmprel   = os.path.join(relpath, re.sub('/', '-', linktitle))
                 filepath = os.path.join(self.datadir, tmprel)
-                if not os.path.exists(filepath) and \
-                       self.get_judgment(link, filepath):
+                if os.path.exists(filepath):
                     newdls.append(tmprel)
+                else:
+                    if self.get_judgment(link, filepath):
+                        newdls.append(tmprel)
 
-        if len(newdls) > 0:
-            for linktitle, link in courtParser.links:
-                if re.match('NEXT', linktitle):
-                    arglist = [\
+        if len(newdls) <= 0:
+            return newdls
+
+        for linktitle, link in courtParser.links:
+            if re.match('NEXT', linktitle):
+                arglist = [\
                            '/usr/bin/wget', '--output-document', '-', \
+                           '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                           '--tries=%d' % self.maxretries, \
                            '-a', self.wgetlog, \
                            '--load-cookies', self.cookiefile.name, \
                            self.baseurl + link \
-                              ]
-                    p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
-                    newdls.extend(self.result_page(p, relpath))
+                          ]
+                p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
+                newdls.extend(self.result_page(p, relpath))
         return newdls

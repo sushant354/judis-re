@@ -17,6 +17,8 @@ class Bombay(utils.BaseCourt):
     def get_cookies(self):
         argList = [\
                    '/usr/bin/wget','--output-document', '-', \
+                   '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                   '--tries=%d' % self.maxretries, \
                    '--keep-session-cookies', '--save-cookies', \
                    self.cookiefile.name,  '-a', self.wgetlog, \
                    self.baseurl + '/ord_qryrepact.php'\
@@ -37,20 +39,33 @@ class Bombay(utils.BaseCourt):
         postdata = [('pageno', 1), ('actcode', 0), ('frmaction', ''), \
                     ('frmdate', fromdate), \
                     ('todate', todate), ('submit1', 'Submit')]
-        encodedData  = urllib.urlencode(postdata)
 
-        arglist =  [\
-                   '/usr/bin/wget', '--output-document', '-', \
-                   '-a', self.wgetlog, '--post-data', "'%s'" % encodedData, \
-                     '--load-cookies', self.cookiefile.name, posturl \
-                   ]
-        p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
+        newdls = []
+        for sideflag in ['C', 'CR', 'OS', 'NC', 'NR', 'AC', 'AR']:
+            data = [('m_sideflg', sideflag)]
+            data.extend(postdata[:])
+        
+            print data    
+            encodedData  = urllib.urlencode(data)
 
-        return self.result_page(p, relpath)
+            arglist =  [\
+                        '/usr/bin/wget', '--output-document', '-', \
+                        '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                        '--tries=%d' % self.maxretries, \
+                        '-a', self.wgetlog, '--post-data', \
+                        "'%s'" % encodedData, \
+                        '--load-cookies', self.cookiefile.name, posturl \
+                       ]
+            p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
+            newdls.extend(self.result_page(p, relpath))
+
+        return newdls 
 
     def get_judgment(self, link, filepath):
         url      = '%s/%s' % (self.baseurl, link)
         arglist  = ['/usr/bin/wget',  '-a', self.wgetlog,
+                    '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                   '--tries=%d' % self.maxretries, \
                     '--output-document', filepath, url]
         p        = subprocess.Popen(arglist)
         p.wait()
@@ -78,6 +93,7 @@ class Bombay(utils.BaseCourt):
                              flags=re.IGNORECASE) and len(linktitle) > 0:
                 tmprel   = os.path.join(relpath, re.sub('/', '-', linktitle))
                 filepath = os.path.join(self.datadir, tmprel)
+                print link, filepath
                 if not os.path.exists(filepath) and \
                        self.get_judgment(link, filepath):
                     newdls.append(tmprel)
@@ -87,6 +103,8 @@ class Bombay(utils.BaseCourt):
                 link = '%s/%s' % (self.baseurl, link)
                 arglist = [\
                            '/usr/bin/wget', '--output-document', '-', \
+                           '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
+                           '--tries=%d' % self.maxretries, \
                            '-a', self.wgetlog, \
                            '--load-cookies', self.cookiefile.name, \
                            link \

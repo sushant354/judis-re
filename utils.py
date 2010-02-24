@@ -5,6 +5,7 @@ import string
 
 from HTMLParser import HTMLParser
 
+
 def read_forked_proc(p):
     webpage = None 
     stdout_fd = p.stdout.fileno()
@@ -74,6 +75,7 @@ class BaseCourt:
         self.DEBUG       = DEBUG
         self.name        = name
         self.datadir     = datadir
+        self.maxretries  = 1 
         mk_dir(self.datadir)
 
         statdir          = '%s/stats' % datadir

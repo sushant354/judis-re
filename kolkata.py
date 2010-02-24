@@ -36,6 +36,7 @@ class Kolkata(utils.BaseCourt):
     def get_cookies(self):
         argList = [\
                    '/usr/bin/wget','--output-document', '-', \
+                   '--tries=%d' % self.maxretries, \
                    '--keep-session-cookies', '--save-cookies', \
                    self.cookiefile.name,  '-a', self.wgetlog, \
                    self.baseurl + '/DtOfJud_Qry.asp' \
@@ -52,6 +53,7 @@ class Kolkata(utils.BaseCourt):
 
         arglist =  [\
                    '/usr/bin/wget', '--output-document', '-', \
+                   '--tries=%d' % self.maxretries, \
                    '-a', self.wgetlog, '--post-data', "'%s'" % encodedData, \
                      '--load-cookies', self.cookiefile.name, posturl \
                    ]
@@ -85,13 +87,13 @@ class Kolkata(utils.BaseCourt):
 
     def get_judgment(self, recordcnt, link, filepath):
         posturl  = self.baseurl + '/Judge_Result_Disp.asp'
-        print posturl
         postdata = [('RecCnt', recordcnt), ('MyChk', link), \
                     ('submit', 'Submit')]    
 
         encodedData  = urllib.urlencode(postdata)
         arglist =  [\
                    '/usr/bin/wget', '--output-document', '-', \
+                   '--tries=%d' % self.maxretries, \
                    '-a', self.wgetlog, '--post-data', "'%s'" % encodedData, \
                      '--load-cookies', self.cookiefile.name, posturl \
                    ]

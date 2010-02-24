@@ -103,10 +103,12 @@ class SupremeCourt(utils.BaseCourt):
 
         for header in scParser.links.keys():
             filename = re.sub('/', '|', header)
+            filename = re.sub("'", ' ', filename)
             tmprel   = os.path.join (relpath, filename)
             filepath = os.path.join (self.datadir, tmprel)
             if not os.path.exists(filepath) and re.search('Coram:|Click here', \
                                                            header) == None:
+            #if not os.path.isdir(filepath) and re.search('Coram:|Click here', header) == None:
                 linkinfo = self.parse_link(scParser.links[header])
                 if linkinfo == None:
                     print 'Warn: Could not download %s. Link is %s' % (header, \
@@ -141,6 +143,7 @@ class SupremeCourt(utils.BaseCourt):
     def get_stateval(self):
         argList = [\
                    '/usr/bin/wget','--output-document', '-', \
+                   '--tries=%d' % self.maxretries, \
                    '--keep-session-cookies', '--save-cookies', \
                    self.cookiefile.name,  '-a', self.wgetlog, \
                    'http://judis.nic.in/supremecourt/DateQry.aspx'\
@@ -156,6 +159,7 @@ class SupremeCourt(utils.BaseCourt):
 
         argList = [\
                    '/usr/bin/wget', '--output-document', '-', \
+                   '--tries=%d' % self.maxretries, \
                    '-a', self.wgetlog, \
                    '--load-cookies', self.cookiefile.name,  '--post-data', \
                    "'%s'" % encodedData, posturl \

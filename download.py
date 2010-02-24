@@ -11,11 +11,12 @@ import kolkata
 import kolkata_app
 import punjab
 import uttaranchal
+import delhi
 
 def print_usage(progname):
     print '''Usage: %s [-t fromdate (DD-MM-YYYY)] [-T todate (DD-MM-YYYY)] 
                        [-s supremecourt -s bombay -s kolkata -s punjab
-                        -s kolkata_app] datadir
+                        -s kolkata_app -s delhi] datadir
           ''' % progname
     print 'The program will download court judgments from judis'
     print 'and will place in a specified directory. Judgments will be'
@@ -88,6 +89,8 @@ if __name__ == '__main__':
             obj = punjab.Punjab(src, datadir)
         elif src == 'uttaranchal':
             obj = uttaranchal.Uttaranchal(src, datadir)
+        elif src == 'delhi':
+            obj = delhi.Delhi(src, datadir)
         else:
             print >> sys.stderr, 'Court %s not yet present' % src
             sys.exit(1)
@@ -96,6 +99,6 @@ if __name__ == '__main__':
     for obj in courtobjs:
         dls = obj.sync(fromdate, todate)
 
-        print 'New downloads from %s' % obj.name
+        print 'Downloads from %s' % obj.name
         for dl in dls: 
             print dl
