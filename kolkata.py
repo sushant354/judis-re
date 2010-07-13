@@ -1,125 +1,120 @@
 import utils
-import urllib
-import HTMLParser
 import tempfile
-import subprocess
-import sys
 import os
-
-class KolkataParser(HTMLParser.HTMLParser):
-    def __init__(self):
-       HTMLParser.HTMLParser.__init__(self)
-       self.links     = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag == 'option':
-            for attr in attrs:
-                if len(attr) > 1 and attr[0] == 'value':
-                    self.links.append(attr[1])
-        elif tag == 'input':
-            reccnt = False
-            for attr in attrs:
-                if attr[0] == 'name' and attr[1] == 'RecCnt':
-                    reccnt = True
-            if reccnt:
-                for attr in attrs:
-                    if attr[0] == 'value':
-                        self.recordcnt = attr[1]
-
+import re
 
 class Kolkata(utils.BaseCourt):
-    def __init__(self, name, datadir, DEBUG = True):
-        utils.BaseCourt.__init__(self, name, datadir, DEBUG)
+    def __init__(self, name, rawdir, metadir, logger):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
         self.baseurl = 'http://www.judis.nic.in/Kolkata'
         self.cookiefile  = tempfile.NamedTemporaryFile()
 
     def get_cookies(self):
-        argList = [\
-                   '/usr/bin/wget','--output-document', '-', \
-                   '--tries=%d' % self.maxretries, \
-                   '--keep-session-cookies', '--save-cookies', \
-                   self.cookiefile.name,  '-a', self.wgetlog, \
-                   self.baseurl + '/DtOfJud_Qry.asp' \
-                  ]
-        p = subprocess.Popen(argList, stdout=subprocess.PIPE)
-        webpage = utils.read_forked_proc(p)
+        self.download_url(self.baseurl + '/DtOfJud_Qry.asp' , \
+                                    savecookies = self.cookiefile.name)
 
-    def download(self, fromdate, todate, doctype):
+    def download(self, dateobj, doctype):
         posturl  = self.baseurl + '/FreeText_Result_1.asp'
-        postdata = [('Free_Txt', 'e'), ('From_Dt', fromdate), \
-                    ('To_Dt', todate), ('OJ', doctype), ('submit', 'Submit')]
+        datestr  = utils.dateobj_to_str(dateobj, '/')
+        postdata = [('Free_Txt', 'e'), ('From_Dt', datestr), \
+                    ('To_Dt', datestr), ('OJ', doctype), ('submit', 'Submit')]
 
-        encodedData  = urllib.urlencode(postdata)
-
-        arglist =  [\
-                   '/usr/bin/wget', '--output-document', '-', \
-                   '--tries=%d' % self.maxretries, \
-                   '-a', self.wgetlog, '--post-data', "'%s'" % encodedData, \
-                     '--load-cookies', self.cookiefile.name, posturl \
-                   ]
-        p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
-
-        return self.download_webpage(p)
+        webpage = self.download_url(posturl, postdata = postdata, \
+                                    loadcookies = self.cookiefile.name)
+ 
+        return webpage
 
     def download_oneday(self, relpath, dateobj):
         self.get_cookies()
 
-        todate   = utils.dateobj_to_str(dateobj, '/')
-        fromdate  = todate
 
-        if self.DEBUG:
-            print 'DATE %s' % todate
-
-        newdls = self.new_downloads(relpath, fromdate, todate, '_J_')
-        newdls.extend(self.new_downloads(relpath, fromdate, todate, '_O_'))
+        newdls = self.new_downloads(relpath, dateobj, '_J_')
+        newdls.extend(self.new_downloads(relpath, dateobj, '_O_'))
         return newdls
 
-    def new_downloads(self, relpath, fromdate, todate, doctype):
+    def new_downloads(self, relpath, dateobj, doctype):
         newdls = []
-        courtParser  = self.download(fromdate, todate, doctype)
-        for link in courtParser.links:
+        webpage  = self.download(dateobj, doctype)
+
+        d = utils.parse_webpage(webpage)
+
+        if not d:
+            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
+            return newdls
+
+        inputs = d.findAll('input')
+
+        reccnt = None
+        for inputtag in inputs:
+            name = inputtag.get('name')
+            value = inputtag.get('value')     
+            if name =='RecCnt' and value:
+                reccnt = value
+
+        if not reccnt:
+            self.log_debug(self.logger.WARN, 'No reccnt for date %s' % dateobj)
+            return newdls
+        
+        options = d.findAll('option')
+ 
+        if len(options) <= 0:
+            self.log_debug(self.logger.WARN, 'No links for date %s' % dateobj)
+            return newdls
+
+        for option in options:
+            link = option.get('value')
+            if not link:
+                continue
+
+
+            self.log_debug(self.logger.NOTE, 'link %s' % link)
+
             relurl   = os.path.join(relpath, link)
-            filepath = os.path.join(self.datadir, relurl)
+            filepath = os.path.join(self.rawdir, relurl)
+            metapath = os.path.join(self.metadir, relurl)
             if not os.path.exists(filepath) or os.stat(filepath).st_size <= 0:
-                if self.get_judgment(courtParser.recordcnt, link, filepath):
-                    newdls.append(relurl)
+                self.get_judgment(reccnt, link, filepath)
+
+            
+            if os.path.exists(filepath):
+                if not os.path.exists(metapath):
+                    metainfo = self.parse_meta_info(option, dateobj)
+                    tags = utils.obj_to_xml('document', metainfo)
+                    utils.save_file(metapath, tags)
+
+                newdls.append(relurl)
         return newdls
+
+    def parse_meta_info(self, option, dateobj):
+        metainfo = {'date':utils.date_to_xml(dateobj)}
+        contents = utils.get_tag_contents(option)
+
+        reobj = re.search('&nbsp;&nbsp;', contents)
+        if reobj:
+           startobj = re.search('JUSTICE ', contents)
+           if startobj and startobj.end() < reobj.start():
+               metainfo['author'] = contents[startobj.end():reobj.start()]
+               remains = contents[reobj.end():]
+               reobj = re.search('&nbsp;&nbsp;', remains)
+               if reobj:
+                   caseno = remains[:reobj.end()]
+                   caseno = re.sub('&nbsp;', '', caseno)
+                   if caseno:
+                      metainfo['caseno'] = caseno
+   
+        return metainfo
 
     def get_judgment(self, recordcnt, link, filepath):
         posturl  = self.baseurl + '/Judge_Result_Disp.asp'
         postdata = [('RecCnt', recordcnt), ('MyChk', link), \
                     ('submit', 'Submit')]    
 
-        encodedData  = urllib.urlencode(postdata)
-        arglist =  [\
-                   '/usr/bin/wget', '--output-document', '-', \
-                   '--tries=%d' % self.maxretries, \
-                   '-a', self.wgetlog, '--post-data', "'%s'" % encodedData, \
-                     '--load-cookies', self.cookiefile.name, posturl \
-                   ]
-        p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
-        webpage = utils.read_forked_proc(p)
-    
-        if webpage != None:
-            filehandle = open(filepath, 'w')
-            filehandle.write(webpage)
-            filehandle.close()
+        webpage = self.download_url(posturl, postdata = postdata, \
+                                    loadcookies = self.cookiefile.name)
+        if webpage:
+            self.log_debug(self.logger.NOTE, 'Saving %s' % link)
+            utils.save_file(filepath, webpage)
             return True
         else:
+            self.log_debug(self.logger.NOTE, 'No download %s' % link)
             return False
-
-    def download_webpage(self, p):
-        newdls = []
-        webpage = utils.read_forked_proc(p)
-
-        if not webpage:
-            return newdls 
-
-        courtParser = KolkataParser()
-
-        try:
-            courtParser.feed(webpage)
-        except HTMLParser.HTMLParseError, e:
-            print >> sys.stderr, 'Malformed HTML: %s' % e
-
-        return courtParser

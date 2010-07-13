@@ -2,8 +2,8 @@ import lobis
 import utils
 
 class Delhi(lobis.Lobis):
-    def __init__(self, name, datadir, DEBUG=True):
-        lobis.Lobis.__init__(self, name, datadir, DEBUG)
+    def __init__(self, name, rawdir, metadir, logger):
+        lobis.Lobis.__init__(self, name, rawdir, metadir, logger)
         self.baseurl   = 'http://lobis.nic.in'
         self.courturl  = self.baseurl + '/dhc'
         self.cookieurl = self.baseurl + '/dhc/juddt.php?scode=31'

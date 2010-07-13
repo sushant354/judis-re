@@ -1,9 +1,14 @@
 import lobis
+import urllib
+import utils
 
 class Uttaranchal(lobis.Lobis):
-    def __init__(self, name, datadir, DEBUG=True):
-        lobis.Lobis.__init__(self, name, datadir, DEBUG)
-        self.baseurl   = 'http://lobis.nic.in'
-        self.courturl  = self.baseurl + '/uhc'
-        self.cookieurl = self.baseurl + '/uhc/juddt.php?scode=35'
-        self.dateurl   = self.baseurl + '/uhc/juddt1.php?dc=35&fflag=1'
+    def __init__(self, name, rawdir, metadir, logger):
+        lobis.Lobis.__init__(self, name, rawdir, metadir, logger)
+        self.baseurl   = 'http://lobis.nic.in/'
+        self.courturl  = urllib.basejoin(self.baseurl, '/uhc')
+        self.cookieurl = urllib.basejoin(self.baseurl, '/uhc/juddt.php?scode=35')
+        self.dateurl   = urllib.basejoin(self.baseurl, '/uhc/juddt1.php?dc=35&fflag=1')
+
+    def date_in_form(self, dateobj):
+        return [('juddt', utils.dateobj_to_str(dateobj, '/'))]

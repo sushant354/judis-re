@@ -5,6 +5,7 @@ import sys
 import datetime
 import string
 
+import utils
 import supremecourt
 import bombay
 import kolkata
@@ -12,11 +13,23 @@ import kolkata_app
 import punjab
 import uttaranchal
 import delhi
+import jharkhand
+import gujarat
+import rajasthan
+import jodhpur
+import karnataka
+import patna
+import patna_orders
+import allahabad
+import cic
 
 def print_usage(progname):
-    print '''Usage: %s [-t fromdate (DD-MM-YYYY)] [-T todate (DD-MM-YYYY)] 
+    print '''Usage: %s [-d debuglevel(0: Err, 1: Warn, 2: Note)]
+                       [-t fromdate (DD-MM-YYYY)] [-T todate (DD-MM-YYYY)] 
                        [-s supremecourt -s bombay -s kolkata -s punjab
-                        -s kolkata_app -s delhi] datadir
+                        -s kolkata_app -s delhi -s jharkhand -s rajasthan
+                        -s jodhpur -s patna -s patna_orders -s gujarat
+                        -s uttaranchal -s karnataka -s allahabad -s cic] datadir
           ''' % progname
     print 'The program will download court judgments from judis'
     print 'and will place in a specified directory. Judgments will be'
@@ -41,10 +54,13 @@ if __name__ == '__main__':
     todate   = None
     srclist  = []
 
+    debuglevel = 0
     progname = sys.argv[0]
-    optlist, remlist = getopt.getopt(sys.argv[1:], 'p:t:T:hs:')
+    optlist, remlist = getopt.getopt(sys.argv[1:], 'd:p:t:T:hs:')
     for o, v in optlist:
-        if o == '-t':
+        if   o == '-d':
+            debuglevel = string.atoi(v)
+        elif o == '-t':
             fromdate =  to_datetime(v)
         elif o == '-T':
             todate   = to_datetime(v)
@@ -68,29 +84,44 @@ if __name__ == '__main__':
     elif todate == None:
         todate = fromdate 
 
-    if len(srclist) <= 0:
-        srclist = ['supremecourt']
 
-    datadir = remlist[0]
+    basedir = remlist[0]
+    rawdir  = os.path.join(basedir, 'raw')
+    metadir = os.path.join(basedir, 'metatags')
+
+    utils.mk_dir(rawdir)
+    utils.mk_dir(metadir)
 
     courtobjs = []
+    dldict = {'bombay':      bombay.Bombay, \
+              'kolkata':     kolkata.Kolkata, \
+              'kolkata_app': kolkata_app.KolkataApp, \
+              'punjab':      punjab.Punjab, \
+              'uttaranchal': uttaranchal.Uttaranchal, \
+              'delhi':       delhi.Delhi, \
+              'jharkhand':   jharkhand.Jharkhand, \
+              'gujarat':     gujarat.Gujarat,
+              'rajasthan':   rajasthan.Rajasthan, \
+              'jodhpur':     jodhpur.Jodhpur, \
+              'karnataka':   karnataka.Karnataka, \
+              'supremecourt': supremecourt.SupremeCourt, \
+              'patna':        patna.Patna, \
+              'patna_orders': patna_orders.PatnaOrders, \
+              'allahabad'   : allahabad.Allahabad, \
+              'cic'         : cic.CIC \
+             }
+
+    if not srclist:
+        srclist = dldict.keys()
+
     for src in srclist:
-        if src == 'supremecourt':
-            obj = supremecourt.SupremeCourt('judis.nic.in', datadir)
-        elif src == 'bombay':
-            obj = bombay.Bombay(src, datadir)
-        elif src == 'goa':
-            obj = goa.Goa(src, datadir)
-        elif src == 'kolkata':
-            obj = kolkata.Kolkata(src, datadir)
-        elif src == 'kolkata_app':
-            obj = kolkata_app.KolkataApp(src, datadir)
-        elif src == 'punjab':
-            obj = punjab.Punjab(src, datadir)
-        elif src == 'uttaranchal':
-            obj = uttaranchal.Uttaranchal(src, datadir)
-        elif src == 'delhi':
-            obj = delhi.Delhi(src, datadir)
+        if dldict.has_key(src):
+            if src == 'supremecourt':
+                srcdir = 'judis.nic.in'
+            else:
+                srcdir = src
+            logger = utils.Logger(debuglevel)
+            obj = dldict[src](srcdir, rawdir, metadir, logger)
         else:
             print >> sys.stderr, 'Court %s not yet present' % src
             sys.exit(1)

@@ -1,29 +1,18 @@
-import sys
 import urllib
-import subprocess
 import tempfile
 import re
-import HTMLParser
 import os
 
 import utils
 
 class Lobis(utils.BaseCourt):
-    def __init__(self, name, datadir, DEBUG):
-        utils.BaseCourt.__init__(self, name, datadir, DEBUG)
+    def __init__(self, name, rawdir, metadir, logger):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
         self.cookiefile  = tempfile.NamedTemporaryFile()
 
     def get_cookies(self):
-        argList = [\
-                   '/usr/bin/wget','--output-document', '-', \
-                   '--tries=%d' % self.maxretries, \
-                   '--keep-session-cookies', '--save-cookies', \
-                   self.cookiefile.name,  '-a', self.wgetlog, \
-                   '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
-                   self.cookieurl \
-                  ]
-        p = subprocess.Popen(argList, stdout=subprocess.PIPE)
-        webpage = utils.read_forked_proc(p)
+        webpage = self.download_url(self.cookieurl, \
+                                    savecookies = self.cookiefile.name)
 
     def date_in_form(self, dateobj):
         return [('jday',   utils.pad_zero(dateobj.day)), \
@@ -36,82 +25,99 @@ class Lobis(utils.BaseCourt):
         todate   = utils.dateobj_to_str(dateobj, '/')
         fromdate  = todate
 
-        if self.DEBUG:
-            print 'DATE %s' % todate
-     
         postdata = self.date_in_form(dateobj) 
         postdata.append(('Submit', 'Submit'))
-        encodedData  = urllib.urlencode(postdata)
 
-        arglist =  [\
-                   '/usr/bin/wget', '--output-document', '-', \
-                   '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
-                   '--tries=%d' % self.maxretries, \
-                   '--keep-session-cookies', '--save-cookies', \
-                   self.cookiefile.name,  '-a', self.wgetlog, \
-                   '--post-data', encodedData, \
-                   self.dateurl \
-                   ]
-        p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
-
-        return self.result_page(p, relpath)
+        webpage = self.download_url(self.dateurl, postdata = postdata, \
+                                    savecookies = self.cookiefile.name)
+        return self.result_page(webpage, relpath, dateobj)
 
     def get_judgment(self, link, filepath):
-        if link[0] == '/':
-            url      = '%s%s' % (self.baseurl, link)
-        else:
-            url      = '%s/%s' % (self.courturl, link)
-
-        arglist  = ['/usr/bin/wget',  '-a', self.wgetlog,
-                    '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
-                    '--tries=%d' % self.maxretries, \
-                    '--load-cookies', self.cookiefile.name, \
-                    '--output-document', filepath, url]
-        p        = subprocess.Popen(arglist)
-        p.wait()
-        if os.path.exists(filepath) and os.stat(filepath).st_size > 0:
+        url = urllib.basejoin(self.courturl, link)
+        self.log_debug(self.logger.NOTE, 'Downloading link %s' % url) 
+        webpage = self.download_url(url, loadcookies = self.cookiefile.name)
+        if webpage:
+            utils.save_file(filepath, webpage)
             return True
         else:    
             return False
 
-    def result_page(self, p, relpath):
+    def parse_meta_info(self, tr, dateobj):
+        metainfo = { 'date': utils.date_to_xml(dateobj)}
+
+        i = 0
+        for td in tr.findAll('td'):
+            contents = utils.get_tag_contents(td)
+            if i == 1:
+                metainfo['caseno'] = contents
+            elif i == 3:
+                reobj = re.search(' vs\.? ', contents, re.IGNORECASE)
+                if reobj:
+                    metainfo['petitioner'] = contents[:reobj.start()]
+                    metainfo['respondent'] = contents[reobj.end():]
+            elif i == 4:
+                reobj = re.search('JUSTICE ', contents)
+                if reobj:
+                    metainfo['author'] = contents[reobj.end():]             
+                
+            i += 1
+        return metainfo
+
+    def handle_judgment_link(self, relpath, tr, dateobj, href, title):
+        tmprel   = os.path.join(relpath, re.sub('/', '-', title))
+        filepath = os.path.join(self.rawdir, tmprel)
+
+        if not os.path.exists(filepath):
+            self.get_judgment(href, filepath)
+
+        if os.path.exists(filepath):
+            metapath = os.path.join(self.metadir, tmprel)
+            metainfo = self.parse_meta_info(tr, dateobj)
+            if metainfo and not os.path.exists(metapath):
+                tags = utils.obj_to_xml('document', metainfo)
+                utils.save_file(metapath, tags)
+
+            return tmprel
+        else:
+            return None
+
+    def result_page(self, webpage, relpath, dateobj):
         newdls      = []
-        webpage     = utils.read_forked_proc(p)
 
         if not webpage:
             return newdls
 
-        courtParser = utils.CourtParser()
+        d = utils.parse_webpage(webpage)
 
-        try:
-            courtParser.feed(webpage)
-        except HTMLParser.HTMLParseError, e:
-            print >> sys.stderr, 'Malformed HTML: %s' % e
-
-        for linktitle, link in courtParser.links:
-            if not re.match('\d+$', linktitle) and not \
-              re.search('PREV|NEXT', linktitle):
-                tmprel   = os.path.join(relpath, re.sub('/', '-', linktitle))
-                filepath = os.path.join(self.datadir, tmprel)
-                if os.path.exists(filepath):
-                    newdls.append(tmprel)
-                else:
-                    if self.get_judgment(link, filepath):
-                        newdls.append(tmprel)
-
-        if len(newdls) <= 0:
+        if not d:
+            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
             return newdls
 
-        for linktitle, link in courtParser.links:
-            if re.match('NEXT', linktitle):
-                arglist = [\
-                           '/usr/bin/wget', '--output-document', '-', \
-                           '--user-agent=Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10', \
-                           '--tries=%d' % self.maxretries, \
-                           '-a', self.wgetlog, \
-                           '--load-cookies', self.cookiefile.name, \
-                           self.baseurl + link \
-                          ]
-                p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
-                newdls.extend(self.result_page(p, relpath))
+        trs = d.findAll('tr')
+
+        for tr in trs:
+            link  = tr.find('a')
+
+            if not link:
+                continue
+
+            href  = link.get('href')
+            title = utils.get_tag_contents(link)
+
+            if (not href) or (not title):
+                self.log_debug(self.logger.NOTE, 'Could not process %s' % link)
+                continue
+
+            if not re.match('\d+$', title) and not re.search('PREV|NEXT',title):
+                self.log_debug(self.logger.NOTE, 'link: %s title: %s' % (href, title))
+                rel = self.handle_judgment_link(relpath, tr, dateobj, href, title)
+                if rel:
+                    newdls.append(rel)
+
+            elif re.match('NEXT', linktitle):
+                self.log_debug(self.logger.NOTE, 'Following next page link: %s' % link)
+                webpage = self.download_url(urllib.basejoin(self.baseurl,link),\
+                                            loadcookies = self.cookiefile.name)
+
+                newdls.extend(self.result_page(webpage, relpath, dateobj))
         return newdls
