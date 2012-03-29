@@ -6,13 +6,12 @@ import os
 import utils
 
 class Lobis(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.cookiefile  = tempfile.NamedTemporaryFile()
 
     def get_cookies(self):
-        webpage = self.download_url(self.cookieurl, \
-                                    savecookies = self.cookiefile.name)
+        self.download_url(self.cookieurl, savecookies = self.cookiefile.name)
 
     def date_in_form(self, dateobj):
         return [('jday',   utils.pad_zero(dateobj.day)), \
@@ -22,9 +21,6 @@ class Lobis(utils.BaseCourt):
 
     def download_oneday(self, relpath, dateobj):
         self.get_cookies()
-        todate   = utils.dateobj_to_str(dateobj, '/')
-        fromdate  = todate
-
         postdata = self.date_in_form(dateobj) 
         postdata.append(('Submit', 'Submit'))
 
@@ -34,7 +30,7 @@ class Lobis(utils.BaseCourt):
 
     def get_judgment(self, link, filepath):
         url = urllib.basejoin(self.courturl, link)
-        self.log_debug(self.logger.NOTE, 'Downloading link %s' % url) 
+        self.logger.info(u'Downloading link %s' % url) 
         webpage = self.download_url(url, loadcookies = self.cookiefile.name)
         if webpage:
             utils.save_file(filepath, webpage)
@@ -73,10 +69,8 @@ class Lobis(utils.BaseCourt):
         if os.path.exists(filepath):
             metapath = os.path.join(self.metadir, tmprel)
             metainfo = self.parse_meta_info(tr, dateobj)
-            if metainfo and not os.path.exists(metapath):
-                tags = utils.obj_to_xml('document', metainfo)
-                utils.save_file(metapath, tags)
-
+            if metainfo and (self.updateMeta or not os.path.exists(metapath)):
+                utils.print_tag_file(metapath, metainfo)
             return tmprel
         else:
             return None
@@ -90,7 +84,7 @@ class Lobis(utils.BaseCourt):
         d = utils.parse_webpage(webpage)
 
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
+            self.logger.error(u'Could not parse html of the result page for date %s' % dateobj)
             return newdls
 
         trs = d.findAll('tr')
@@ -105,19 +99,24 @@ class Lobis(utils.BaseCourt):
             title = utils.get_tag_contents(link)
 
             if (not href) or (not title):
-                self.log_debug(self.logger.NOTE, 'Could not process %s' % link)
+                self.logger.info(u'Could not process %s' % link)
                 continue
 
             if not re.match('\d+$', title) and not re.search('PREV|NEXT',title):
-                self.log_debug(self.logger.NOTE, 'link: %s title: %s' % (href, title))
+                self.logger.info(u'link: %s title: %s' % (href, title))
                 rel = self.handle_judgment_link(relpath, tr, dateobj, href, title)
                 if rel:
                     newdls.append(rel)
 
-            elif re.match('NEXT', linktitle):
-                self.log_debug(self.logger.NOTE, 'Following next page link: %s' % link)
-                webpage = self.download_url(urllib.basejoin(self.baseurl,link),\
-                                            loadcookies = self.cookiefile.name)
+        if newdls:
+            links  = d.findAll('a')
+            for link in links:
+                href  = link.get('href')
+                title = utils.get_tag_contents(link)
+                if title and href and re.match('NEXT', title):
+                   self.logger.info(u'Following next page link: %s' % link)
+                   webpage = self.download_url(urllib.basejoin(self.baseurl,href),\
+                                               loadcookies = self.cookiefile.name)
 
-                newdls.extend(self.result_page(webpage, relpath, dateobj))
+                   newdls.extend(self.result_page(webpage, relpath, dateobj))
         return newdls

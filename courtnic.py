@@ -8,8 +8,8 @@ import string
 import utils
 
 class Courtnic(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
 
         self.baseurl    = 'http://courtnic.nic.in/'
         self.cookiefile = tempfile.NamedTemporaryFile()        
@@ -24,29 +24,28 @@ class Courtnic(utils.BaseCourt):
     def get_judgment(self, url, relpath, metainfo):
         filename = utils.url_to_filename(url, False, ['yID', 'nID', 'ID'])
         if not filename:
-            self.log_debug(self.logger.WARN, 'No filename for %s' % url)
+            self.logger.warning(u'No filename for %s' % url)
             return 
 
         rel = os.path.join(relpath, filename)
         filepath = os.path.join(self.rawdir, rel)
 
         if  os.path.exists(filepath):
-            self.log_debug(self.logger.NOTE, 'Already exists %s' % filepath)
+            self.logger.info(u'Already exists %s' % filepath)
         else:
-            self.log_debug(self.logger.NOTE, 'Downloading %s' % url)
+            self.logger.info(u'Downloading %s' % url)
             webpage = self.download_url(url, loadcookies = self.cookiefile.name)
             if not webpage:
-                self.log_debug(self.logger.WARN, 'Could not download %s' % url)
+                self.logger.warning(u'Could not download %s' % url)
                 return 
 
             utils.save_file(filepath, webpage)
-            self.log_debug(self.logger.NOTE, 'Saved %s' % filepath)
+            self.logger.info(u'Saved %s' % filepath)
 
         if  os.path.exists(filepath):
             metapath = os.path.join(self.metadir, rel)
-            if metainfo and not os.path.exists(metapath):
-                tags = utils.obj_to_xml('document', metainfo)
-                utils.save_file(metapath, tags)
+            if metainfo and (self.updateMeta or not os.path.exists(metapath)):
+                utils.print_tag_file(metapath, metainfo)
 
         return rel
 
@@ -69,10 +68,12 @@ class Courtnic(utils.BaseCourt):
             metainfo['caseno'] = tds[0].contents[0].encode('ascii', 'ignore')
 
             title = tds[0].contents[2].encode('ascii', 'ignore')
-            reobj = re.search(' vs\.? ', title, re.IGNORECASE)
-            if reobj:
-                metainfo['petitioner'] = title[:reobj.start()]
-                metainfo['respondent'] = title[reobj.end():]
+            petitioner, respondent = utils.get_petitioner_respondent(title)
+
+            if petitioner:
+                metainfo['petitioner'] = petitioner
+            if respondent:
+                metainfo['respondent'] = respondent
 
         return metainfo
 
@@ -80,20 +81,20 @@ class Courtnic(utils.BaseCourt):
         newdls = []
         webpage = self.download_url(url, loadcookies = self.cookiefile.name)
         if not webpage:
-            self.log_debug(self.logger.WARN, 'Could not download %s' % url)
+            self.logger.warning(u'Could not download %s' % url)
             return newdls
 
         webpage = re.sub('""', '"', webpage)
         startobj = re.search('<table', webpage)
         endobj   = re.search('</table>', webpage)
         if not startobj or not endobj or startobj.start() >= endobj.end():
-            self.log_debug(self.logger.WARN, 'No table found')
+            self.logger.warning(u'No table found')
             return newdls
     
         d = utils.parse_webpage(webpage[startobj.start():endobj.end()])
 
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for url %s' % url)
+            self.logger.error(u'Could not parse html of the result page for url %s' % url)
             return newdls
 
         trs = d.findAll('tr')
@@ -105,11 +106,11 @@ class Courtnic(utils.BaseCourt):
             for link in links:
                 relurl = link.get('href')
                 if not relurl:
-                    self.log_debug(self.logger.WARN, 'No href in %s' % link)
+                    self.logger.warning(u'No href in %s' % link)
                     continue
 
                 action = self.action_on_url(relurl)
-                self.log_debug(self.logger.NOTE, 'Action %s on %s' % (action, relurl))
+                self.logger.info(u'Action %s on %s' % (action, relurl))
 
                 if action == 'ignore':
                     continue
@@ -124,12 +125,12 @@ class Courtnic(utils.BaseCourt):
                 elif action == 'recurse':
                     page = self.find_page(url)
                     if page and (page not in pagelist):
-                        self.log_debug(self.logger.NOTE, 'recursing %s' % url)
+                        self.logger.info(u'recursing %s' % url)
                         pagelist.append(page)
                         newdls.extend(self.result_url(url, relpath, pagelist, \
                                                       dateobj))
                     else:
-                        self.log_debug(self.logger.NOTE, 'Not recursing %s' % url)
+                        self.logger.info(u'Not recursing %s' % url)
 
         return newdls    
           

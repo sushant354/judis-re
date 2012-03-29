@@ -5,10 +5,10 @@ import re
 import os
 
 class Karnataka(utils.BaseCourt):
-    def __init__(self, srcdir, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, srcdir, rawdir, metadir, logger)
-        self.baseurl  = 'http://164.100.80.145:8080/'
-        self.courturl = urllib.basejoin(self.baseurl, '/dspace/')
+    def __init__(self, srcdir, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, srcdir, rawdir, metadir, statsdir, updateMeta)
+        self.baseurl  = 'http://judgmenthck.kar.nic.in'
+        self.courturl = urllib.basejoin(self.baseurl, '/judgments/')
         self.cookiefile = tempfile.NamedTemporaryFile()
         self.get_cookies()
 
@@ -16,9 +16,9 @@ class Karnataka(utils.BaseCourt):
         self.download_url(self.courturl, savecookies = self.cookiefile.name)
 
     def action_on_link(self, link, linktitle):
-        if re.match('/dspace/handle', link):
+        if re.match('/judgments/handle', link):
             return 'judgmentlink'
-        elif re.match('/dspace/bitstream.+pdf', link):
+        elif re.match('/judgments/bitstream.+pdf', link):
             return 'save'
         elif re.match('next', linktitle, re.IGNORECASE):
             return 'recurse'
@@ -41,18 +41,17 @@ class Karnataka(utils.BaseCourt):
         if not os.path.exists(filepath):
             webpage = self.download_url(url, loadcookies = self.cookiefile.name)
             if not webpage:
-                self.log_debug(self.logger.WARN, 'Could not download judgment %s' % \
-                                           url)
+                self.logger.warning(u'Could not download judgment %s' % url)
                 return None
        
  
             utils.save_file(filepath, webpage)
-            self.log_debug(self.logger.NOTE, 'Saved %s' % filepath)
+            self.logger.info(u'Saved %s' % filepath)
 
         if os.path.exists(filepath):
-            if not os.path.exists(metapath) and metainfo:
-                tags = utils.obj_to_xml('document', metainfo)
-                utils.save_file(metapath, tags)
+            if self.updateMeta or not os.path.exists(metapath):
+                metainfo['url'] = url
+                utils.print_tag_file(metapath, metainfo)
 
             return relurl
         else:
@@ -100,12 +99,12 @@ class Karnataka(utils.BaseCourt):
     def process_judgment_page(self, relpath, url, dateobj):
         webpage = self.download_url(url, loadcookies = self.cookiefile.name)
         if not webpage:
-            self.log_debug(self.logger.WARN, 'Could not download %s' % url)
+            self.logger.warning(u'Could not download %s' % url)
             return None
 
         d = utils.parse_webpage(webpage)
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse %s' % url)
+            self.logger.warning(u'Could not parse %s' % url)
             return None
 
         metainfo = self.get_meta_info(d, dateobj)
@@ -115,13 +114,13 @@ class Karnataka(utils.BaseCourt):
             title = utils.get_tag_contents(link)
 
             if (not href) or (not title):
-                self.log_debug(self.logger.WARN, 'Could not process %s' % link)
+                self.logger.warning(u'Could not process %s' % link)
                 continue
 
             action = self.action_on_link(href, title)
             newurl = urllib.basejoin(url, href)
             if action == 'save':
-                self.log_debug(self.logger.NOTE, 'Downloading %s' % newurl)
+                self.logger.info(u'Downloading %s' % newurl)
                 return self.get_judgment(relpath, newurl, title, metainfo)
 
         return None
@@ -133,7 +132,7 @@ class Karnataka(utils.BaseCourt):
         d = utils.parse_webpage(webpage)
 
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
+            self.logger.error(u'Could not parse html of the result page for date %s' % dateobj)
             return newdls
 
         for link in d.findAll('a'):
@@ -141,21 +140,21 @@ class Karnataka(utils.BaseCourt):
             title = utils.get_tag_contents(link)
 
             if (not href) or (not title) or linkdict.has_key(href):
-                self.log_debug(self.logger.WARN, 'Could not process %s' % link)
+                self.logger.warning(u'Could not process %s' % link)
                 continue
 
             linkdict[href] = 1
 
             action = self.action_on_link(href, title)
-            self.log_debug(self.logger.NOTE, 'Action %s on link %s title %s' %\
-                                           (action, href, title))       
+            self.logger.info(u'Action %s on link %s title %s' %\
+                                     (action, href, title))       
             newurl = urllib.basejoin(url, href)
             if action == 'judgmentlink':
                 relurl = self.process_judgment_page(relpath, newurl, dateobj)
                 if relurl:
                     newdls.append(relurl)
                 else:
-                    self.log_debug(self.logger.WARN, 'Judgment link not working %s' % newurl)
+                    self.logger.warning(u'Judgment link not working %s' % newurl)
             elif action == 'recurse':
                 newdls.extend(self.result_page(relpath, newurl, dateobj, 
                                                linkdict))

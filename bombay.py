@@ -1,5 +1,4 @@
 import urllib
-import subprocess
 import tempfile
 import re
 import os
@@ -7,8 +6,8 @@ import os
 import utils
 
 class Bombay(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://bombayhighcourt.nic.in'
         self.cookiefile  = tempfile.NamedTemporaryFile()
 
@@ -20,38 +19,21 @@ class Bombay(utils.BaseCourt):
         self.get_cookies()
         posturl  = self.baseurl + '/ordqryrepact_action.php'
 
-        todate   = utils.dateobj_to_str(dateobj, '-')
-        fromdate  = todate
-
+        fromdate   = utils.dateobj_to_str(dateobj, '-')
+        todate     = fromdate 
       
-        postdata = [('pageno', 1), ('actcode', 0), ('frmaction', ''), \
+        postdata = [('pageno', 1), ('frmaction', ''), ('actcode', 0), \
                     ('frmdate', fromdate), \
                     ('todate', todate), ('submit1', 'Submit')]
 
         newdls = []
         linkdict = {}
         for sideflag in ['C', 'CR', 'OS', 'NC', 'NR', 'AC', 'AR']:
-            data = [('m_sideflg', sideflag)]
-            data.extend(postdata[:])
-        
-            encodedData  = urllib.urlencode(data)
-
-            arglist =  [\
-                        '/usr/bin/wget', '--output-document', '-', \
-                        '--user-agent=%s' % self.useragent, \
-                        '--tries=%d' % self.maxretries, \
-                        '-a', self.wgetlog, '--post-data', \
-                        "'%s'" % encodedData, \
-                        '--load-cookies', self.cookiefile.name \
-                       ]
-
-            if self.logger.debuglevel >= self.logger.NOTE:
-                arglist.append('--debug')
-
-            arglist.append(posturl)
-
-            p = subprocess.Popen(arglist, stdout=subprocess.PIPE)
-            webpage = p.communicate()[0]
+            data = postdata[:]
+            data.insert(2, ('m_sideflg', sideflag))
+      
+            webpage = self.download_url(posturl, postdata = data, \
+                                        loadcookies = self.cookiefile.name) 
             newdls.extend(self.result_page(webpage, relpath, dateobj, linkdict))
 
         return newdls 
@@ -61,11 +43,11 @@ class Bombay(utils.BaseCourt):
         webpage  = self.download_url(url)
  
         if webpage:
-            self.log_debug(self.logger.NOTE, 'Successfully downloaded %s' % url)
+            self.logger.info(u'Successfully downloaded %s' % url)
             utils.save_file(filepath, webpage)
             return True
         else:    
-            self.log_debug(self.logger.WARN, 'Got empty page for %s' % url)
+            self.logger.warning(u'Got empty page for %s' % url)
             return False
 
     def parse_meta_info(self, tr, dateobj):
@@ -98,8 +80,7 @@ class Bombay(utils.BaseCourt):
         return metainfo
 
     def store_meta_tags(self, metapath, metainfo):
-        tags = utils.obj_to_xml('document', metainfo)
-        utils.save_file(metapath, tags) 
+        utils.print_tag_file(metapath, metainfo)
 
     def result_page(self, webpage, relpath, dateobj, linkdict):
         newdls      = []
@@ -110,7 +91,7 @@ class Bombay(utils.BaseCourt):
         courtParser = utils.parse_webpage(webpage)
 
         if not courtParser:
-            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
+            self.logger.error(u'Could not parse html of the result page for date %s' % dateobj)
             return newdls
 
         trs  = courtParser.findAll('tr')
@@ -123,7 +104,7 @@ class Bombay(utils.BaseCourt):
                 href  = link.get('href')
  
                 if (not title) or (not href):
-                    self.log_debug(self.logger.WARN, 'Could not process %s' % link)
+                    self.logger.warning(u'Could not process %s' % link)
                     continue
 
                 if linkdict.has_key(href):
@@ -137,7 +118,7 @@ class Bombay(utils.BaseCourt):
                         newdls.append(dl)
 
                 elif title == 'Next':
-                    self.log_debug(self.logger.NOTE, 'Following Next page %s' % href)
+                    self.logger.info(u'Following Next page %s' % href)
                     newlink = urllib.basejoin (self.baseurl, href)
                     webpage = self.download_url(newlink, \
                                             loadcookies = self.cookiefile.name)
@@ -145,7 +126,7 @@ class Bombay(utils.BaseCourt):
                     newdls.extend(self.result_page(webpage, relpath, dateobj, \
                                                    linkdict))
                 else:
-                    self.log_debug(self.logger.NOTE, 'No action for %s' % href)
+                    self.logger.info(u'No action for %s' % href)
         return newdls
 
     def handle_link(self, relpath, href, title, tr, dateobj):
@@ -153,15 +134,15 @@ class Bombay(utils.BaseCourt):
         filepath = os.path.join(self.rawdir, tmprel)
         metapath = os.path.join(self.metadir, tmprel)
 
-        self.log_debug(self.logger.NOTE, 'link: %s title: %s' %  (href, title))
+        self.logger.info(u'link: %s title: %s' %  (href, title))
 
         if os.path.exists(filepath):
-            self.log_debug(self.logger.NOTE, 'Already exists %s' % filepath)
+            self.logger.info(u'Already exists %s' % filepath)
         else:
             self.get_judgment(href, filepath)
 
         if os.path.exists(filepath):
-            if not os.path.exists(metapath):
+            if self.updateMeta or not os.path.exists(metapath):
                 metainfo = self.parse_meta_info(tr, dateobj)
                 if metainfo:
                     self.store_meta_tags(metapath, metainfo) 

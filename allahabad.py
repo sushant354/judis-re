@@ -5,12 +5,11 @@ import re
 import os
 
 class Allahabad(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://elegalix.allahabadhighcourt.in'
         self.dateurl = urllib.basejoin(self.baseurl, '/elegalix/WebStartJudgmentDateSearch.do')
         self.cookiefile  = tempfile.NamedTemporaryFile()
-
 
     def post_data(self, parsedD, dateobj):
         postdata = [('highCourtBenchCode', 'X'), \
@@ -31,8 +30,7 @@ class Allahabad(utils.BaseCourt):
         judgments = []
         d = utils.parse_webpage(webpage)
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse result page %s' % \
-                                             dateobj)
+            self.logger.error(u'Could not parse result page %s' % dateobj)
             return judgments
 
         # get judgments
@@ -84,7 +82,7 @@ class Allahabad(utils.BaseCourt):
                                                       self.cookiefile.name)
         d = utils.parse_webpage(webpage)
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse date search page')
+            self.logger.error(u'Could not parse date search page')
             return dls 
 
         forms = d.findAll('form')
@@ -95,7 +93,7 @@ class Allahabad(utils.BaseCourt):
                 break
 
         if not action:
-            self.log_debug(self.logger.ERR, 'Could not find date search form')
+            self.logger.error(u'Could not find date search form')
             return dls
 
         posturl  = urllib.basejoin(self.baseurl, action)
@@ -115,22 +113,20 @@ class Allahabad(utils.BaseCourt):
         for judgment in judgments:
             if judgment.has_key('next') and \
               not recursed.has_key(judgment['link']):
-                self.log_debug(self.logger.NOTE, 'Recursing %s' % \
-                                                  judgment['link'])
+                self.logger.info(u'Recursing %s' % judgment['link'])
                 recursed[judgment['link']] = 1
                 webpage = self.download_url(judgment['link'], \
                                             loadcookies = self.cookiefile.name)
                 dls.extend(self.dl_result_page(relpath, posturl, webpage, \
                                                dateobj, recursed))
             elif not judgment.has_key('next'):
-                self.log_debug(self.logger.NOTE, 'Processing judgment %s' % \
-                                                 judgment['link'])
+                self.logger.info(u'Processing judgment %s' % judgment['link'])
                 relurl = self.get_judgment(relpath, judgment)
                 if relurl:
                     dls.append(relurl)
                 else:
-                    self.log_debug(self.logger.WARN, 'Did not download %s' % \
-                                                      judgment['link'])
+                    self.logger.warning(u'Did not download %s' % \
+                                        judgment['link'])
 
         return dls
     
@@ -139,8 +135,7 @@ class Allahabad(utils.BaseCourt):
         reobj = re.search('judgmentID=(?P<id>\d+)', judgment['link'])
 
         if not reobj:
-            self.log_debug(self.logger.WARN, 'No judgment id in %s' % \
-                                             judgment['link'])
+            self.logger.warning(u'No judgment id in %s' %  judgment['link'])
         else:
             judgmentId = reobj.groupdict()['id']
             relurl = os.path.join(relpath, judgmentId)
@@ -152,15 +147,14 @@ class Allahabad(utils.BaseCourt):
                                            loadcookies = self.cookiefile.name)
                 if pdfdoc:
                     utils.save_file(filepath, pdfdoc)
-                    self.log_debug(self.logger.NOTE, 'Saved %s' % relurl)
+                    self.logger.info(u'Saved %s' % relurl)
                 else:
-                    self.log_debug(self.logger.WARN, 'Did not download %s' % \
-                                                      judgment['link'])
+                    self.logger.info(u'Did not download %s' % judgment['link'])
 
-            if os.path.exists(filepath) and not os.path.exists(metapath):
-                tags = utils.obj_to_xml('document', judgment['metainfo'])
-                self.log_debug(self.logger.NOTE, 'Saved metainfo %s' % relurl)
-                utils.save_file(metapath, tags)
+            if os.path.exists(filepath) and \
+                    (self.updateMeta or not os.path.exists(metapath)):
+                utils.print_tag_file(metapath, judgment['metainfo'])
+                self.logger.info(u'Saved metainfo %s' % relurl)
 
             if not os.path.exists(filepath):
                 relurl = None

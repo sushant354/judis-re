@@ -1,28 +1,22 @@
 import os
 import re
-import subprocess
-import urllib
 import string
 import tempfile
 
 import utils
 
 class SupremeCourt(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
 
         self.cookiefile  = tempfile.NamedTemporaryFile()
         self.webformUrl  = 'http://judis.nic.in/supremecourt/Chrseq.aspx'
         self.dateqryUrl  = 'http://judis.nic.in/supremecourt/DateQry.aspx' 
 
+        self.dataTypes = ['A']
+        self.statevalNames = ['__VIEWSTATE']
 
-    def download_oneday(self, relpath, dateobj):
-        self.stateval   = self.get_stateval()
-
-        if not self.stateval:
-            self.log_debug(self.logger.ERR, 'No stateval for date %s' % dateobj)
-            return []
-
+    def date_postdata(self, dateobj, dataType):
         if dateobj.month < 10:
             mnth = '0%d' % dateobj.month
         else:
@@ -33,15 +27,28 @@ class SupremeCourt(utils.BaseCourt):
         else:
             day = '%d' % dateobj.day
 
-        postdata = [('__VIEWSTATE', self.stateval), \
-                     ('ddlday1', day), ('ddlmonth1', mnth),\
+        postdata = self.state_data()
+        postdata.extend(
+                    [ ('ddlday1', day), ('ddlmonth1', mnth),\
                      ('ddlyear1', dateobj.year), ('ddlday2', day), \
                      ('ddlmonth2', mnth),('ddlyear2', dateobj.year),\
-                     ('ddlreport', 'A'), ('button', 'Submit')\
-                    ]
+                     ('ddlreport', dataType), ('button', 'Submit')\
+                    ])
+        return postdata
 
-        webpage  = self.download_webpage(postdata, self.dateqryUrl)
-        return self.datequery_result(webpage, relpath, 1, dateobj)
+    def download_oneday(self, relpath, dateobj):
+        newdls = []
+        for dataType in self.dataTypes:
+            self.stateval   = self.get_stateval(self.dateqryUrl)
+
+            if not self.stateval:
+                self.logger.error(u'No stateval for date %s' % dateobj)
+
+            postdata = self.date_postdata(dateobj, dataType)
+
+            webpage  = self.download_webpage(postdata, self.dateqryUrl)
+            newdls.extend(self.datequery_result(webpage, relpath, 1, dateobj))
+        return newdls
 
     def extract_links(self, prsdobj, pagenum):
         linkdict = {'docs': []}
@@ -58,7 +65,7 @@ class SupremeCourt(utils.BaseCourt):
 
         return linkdict
 
-    def get_meta_tags(self, judgedict, dateobj):
+    def save_meta_tags(self, metapath, judgedict, dateobj):
         tagdict  = {}
 
         if judgedict.has_key('title'):
@@ -76,17 +83,17 @@ class SupremeCourt(utils.BaseCourt):
                     tagdict['respondent'] = respondent
 
         if judgedict.has_key('bench'):
-            bench = string.split(judgedict['bench'], ',')
+            bench = judgedict['bench'].split(',')
             if len(bench) > 0:
                 benchdict = {}
                 benchdict['name'] = []
                 for judge in bench:
                     benchdict['name'].append(judge)
-                tagdict['bench'] = benchdict 
-        if dateobj:
-            tagdict['date'] = utils.date_to_xml(dateobj)
+                tagdict['bench'] = benchdict
+ 
+        tagdict['date'] = utils.date_to_xml(dateobj)
 
-        return utils.obj_to_xml('document', tagdict) 
+        utils.print_tag_file(metapath, tagdict) 
 
     def get_judgment_info(self, tr):
         judgedict = {}
@@ -116,19 +123,22 @@ class SupremeCourt(utils.BaseCourt):
         d = utils.parse_webpage(webpage)
 
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
-            return newdls
+            self.logger.error(u'Could not parse html of the result page for date %s' % dateobj)
+            return downloaded 
 
         stateval  = self.extract_state(d)
         if stateval != None and stateval != self.stateval:
             self.stateval = stateval
-            self.log_debug(self.logger.NOTE, 'stateval changed')
+            self.logger.info(u'stateval changed')
 
         linkdict = self.extract_links(d, pagenum)
 
         for link in linkdict['docs']:
-            self.log_debug(self.logger.NOTE, 'Processing link: %s href: %s' % \
-                                      (link['title'], link['href']))
+            if (not link.has_key('title')) or (not link.has_key('href')):
+                continue
+
+            self.logger.info(u'Processing link: %s href: %s' % \
+                              (link['title'], link['href']))
 
             filename = re.sub('/', '|', link['title'])
             filename = re.sub("'", ' ', filename)
@@ -141,20 +151,19 @@ class SupremeCourt(utils.BaseCourt):
                 if webpage:
                     utils.save_file(rawpath, webpage)
                 else:
-                    self.log_debug(self.logger.WARN, 'Could not download %s' % \
-                                                                  link['title'])
+                    self.logger.warning(u'Could not download %s' % \
+                                         link['title'])
 
             if os.path.exists(rawpath) and not os.path.isdir(rawpath):
-                if not os.path.exists(metapath):
-                    tags = self.get_meta_tags(link, dateobj)
-                    utils.save_file(metapath, tags)
+                if not os.path.exists(metapath) or self.updateMeta:
+                    self.save_meta_tags(metapath, link, dateobj)
                 downloaded.append(tmprel)
                   
         if linkdict.has_key('next'):
             link = linkdict['next']
             
-            self.log_debug(self.logger.NOTE, 'Following page: %s href: %s' % \
-                                      (link['title'], link['href']))
+            self.logger.info(u'Following page: %s href: %s' % \
+                             (link['title'], link['href']))
 
             webpage = self.download_link(link)
             if webpage:
@@ -162,23 +171,30 @@ class SupremeCourt(utils.BaseCourt):
                                                       pagenum + 1, dateobj)
                 downloaded.extend(nextdownloads)
             else:
-                self.log_debug(self.logger.WARN, 'Could not download %s'%link['title'])
+                self.logger.warning(u'Could not download %s' % link['title'])
 
         return downloaded
 
     def extract_state(self, prsdobj):
-        stateval = None
+        stateval = {} 
         inputs = prsdobj.findAll('input')
         for input in inputs:
             name = input.get('name')
-            if name == '__VIEWSTATE':
-                stateval = input.get('value')
+            if name in self.statevalNames:
+                stateval[name] = input.get('value')
         return stateval
 
-    def get_stateval(self):
-        dateurl = 'http://judis.nic.in/supremecourt/DateQry.aspx'
-        webpage = self.download_url(dateurl, \
-                                      savecookies = self.cookiefile.name)
+    def state_data(self):
+        t = []
+        for name in self.statevalNames:
+            if self.stateval.has_key(name):
+                t.append((name, self.stateval[name]))
+        return t
+
+
+    def get_stateval(self, url):
+        webpage = self.download_url(url, \
+                                    savecookies = self.cookiefile.name)
 
         d = utils.parse_webpage(webpage)
         if d:
@@ -187,19 +203,9 @@ class SupremeCourt(utils.BaseCourt):
             return None
 
     def download_webpage(self, postdata, posturl):
-        encodedData  = urllib.urlencode(postdata)
-
-        argList = [\
-                   '/usr/bin/wget', '--output-document', '-', \
-                   '--tries=%d' % self.maxretries, \
-                   '-a', self.wgetlog, \
-                   '--load-cookies', self.cookiefile.name,  '--post-data', \
-                   "'%s'" % encodedData, posturl \
-                  ]
-        command = string.join(argList, ' ')
-
-        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-        return p.communicate()[0] 
+        webpage = self.download_url(posturl, postdata = postdata, \
+                                    loadcookies = self.cookiefile.name)
+        return webpage 
 
     def parse_link(self, linkname):
        linkRe = "javascript:__doPostBack\('(?P<event_target>[^']+)','(?P<event_arg>[^']*)'\)"
@@ -208,14 +214,14 @@ class SupremeCourt(utils.BaseCourt):
     def download_link(self, link):
         linkinfo = self.parse_link(link['href'])
         if linkinfo == None:
-            self.log_debug(self.logger.WARN, 'Values not in %s. title is %s' % \
-                                      (link['href'], link['title']))
+            self.logger.warning(u'Values not in %s. title is %s' % \
+                                 (link['href'], link['title']))
             return None
 
         eventTarget =string.join(linkinfo.group('event_target').split('$'), ':')
-        postdata = [('__VIEWSTATE',     self.stateval), \
-                    ('__EVENTTARGET', eventTarget), \
-                    ('__EVENTARGUMENT', linkinfo.group('event_arg'))]
+        postdata = self.state_data() 
+        postdata.extend([('__EVENTTARGET', eventTarget), \
+                        ('__EVENTARGUMENT', linkinfo.group('event_arg'))])
 
         return self.download_webpage(postdata, self.webformUrl)
 

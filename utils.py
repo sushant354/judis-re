@@ -1,4 +1,3 @@
-import select
 import os
 import datetime
 import string
@@ -8,13 +7,76 @@ import urlparse
 import subprocess
 import types
 from xml.sax import saxutils
+from xml.parsers.expat import ExpatError
+from xml.dom import minidom, Node
 import re
 import tempfile
-import threading
-import time
+import logging
+import codecs
+import magic
+import calendar
 
 from HTMLParser import HTMLParser, HTMLParseError
-from BeautifulSoup import BeautifulSoup, NavigableString
+from BeautifulSoup import BeautifulSoup, NavigableString, Tag
+
+monthre = 'january|february|march|april|may|june|july|august|september|october|november|december|frbruary|februay'
+
+descriptiveDateRe = re.compile('(?P<day>\d+)\s*(st|nd|rd|th)?\s*(?P<month>%s)[\s.,]+(?P<year>\d+)' % monthre, flags=re.IGNORECASE)
+
+digitsDateRe  = re.compile('(?P<day>\d+)\s*[/. -]\s*(?P<month>\d+)\s*[/. -]\s*(?P<year>\d+)')
+
+def month_to_num(month):
+    count = 0
+    month = month.lower()
+    if month in ['frbruary', 'februay']:
+        month = 'february'
+    for mth in calendar.month_name:
+        if mth.lower() == month:
+            return count
+        count += 1
+    return None
+
+def datestr_to_obj(text):
+    text = text.encode('ascii', 'ignore')
+    reobj = descriptiveDateRe.search(text)
+    dateobj = None
+    day = month = year = None
+    if reobj:
+        groups = reobj.groupdict()
+        year = int(groups['year'])
+        month = month_to_num(groups['month'])
+        day = int(groups['day'])
+    else:
+        reobj = digitsDateRe.search(text)
+        if reobj:
+            groups = reobj.groupdict()
+            year  = int(groups['year'])
+            month = int(groups['month'])
+            day   = int(groups['day'])
+    if day and month and year:
+        if year in [20111, 20141, 20110]:
+            year = 2011
+        try:
+            dateobj = datetime.datetime(year, month, day)
+        except ValueError:
+            dateobj = None
+    return dateobj
+def parse_xml(xmlpage):
+    try: 
+        d = minidom.parseString(xmlpage)
+    except ExpatError:
+        d = None
+    return d
+
+def get_node_value(xmlNodes):
+    value = [] 
+    ignoreValues = ['\n']
+    for node in xmlNodes:
+        if node.nodeType == Node.TEXT_NODE:
+            if node.data not in ignoreValues:
+                value.append(node.data)
+    return u''.join(value)
+
 
 def check_next_page(tr, pagenum):
     links    = tr.findAll('a')
@@ -45,7 +107,7 @@ def check_next_page(tr, pagenum):
 
 def parse_webpage(webpage):
     try:
-        d = BeautifulSoup(webpage)
+        d = BeautifulSoup(webpage, convertEntities=BeautifulSoup.HTML_ENTITIES)
         return d
     except:
         return None
@@ -59,53 +121,53 @@ def date_to_xml(dateobj):
 
     return datedict
 
+def print_tag_file(filepath, feature):
+    filehandle = codecs.open(filepath, 'w', 'utf8')
+
+    filehandle.write(u'<?xml version="1.0" encoding="utf-8"?>\n')
+    filehandle.write(obj_to_xml('document', feature))
+
+    filehandle.close()
+
 def obj_to_xml(tagName, obj):
     if type(obj) in types.StringTypes:
         return get_xml_tag(tagName, obj)
 
-    xmltags = '<%s>\n' % tagName
+    tags = ['<%s>' % tagName] 
     ks = obj.keys()
     ks.sort()
     for k in ks:
-        if type(obj[k]) == types.DictType:
-            xmltags += obj_to_xml(k, obj[k])
-        elif type(obj[k]) == types.ListType:
-            for o in obj[k]:
-                xmltags += obj_to_xml(k, o)
+        newobj = obj[k]
+        if type(newobj) == types.DictType:     
+            tags.append(obj_to_xml(k, newobj))
+        elif type(newobj) == types.ListType:
+            for o in newobj:
+               tags.append(obj_to_xml(k, o))
         else:
-            xmltags += get_xml_tag(k, obj[k])
-    xmltags += '</%s>\n' % tagName
+            tags.append(get_xml_tag(k, obj[k]))
+    tags.append(u'</%s>' % tagName)
+    xmltags =  u'\n'.join(tags)
+
     return xmltags
 
-
-t = "".join(map(chr, range(256)))
-d = "".join(map(chr, range(0,31) + range(128,256)))
-
-def remove_cntl_chars(tagValue):
-    global t
-    global d
-
-    if type(tagValue) == types.UnicodeType:
-        tagValue = tagValue.encode('ascii', 'ignore')
-
-    return tagValue.translate(t, d)
-
-def get_xml_tag(tagName, tagValue):
+def get_xml_tag(tagName, tagValue, escape = True):
     if type(tagValue) == types.IntType:
-        xmltag = '<%s>%d</%s>\n' % (tagName, tagValue, tagName)
+        xmltag = u'<%s>%d</%s>' % (tagName, tagValue, tagName)
     elif type(tagValue) == types.FloatType:
-        xmltag = '<%s>%f</%s>\n' % (tagName, tagValue, tagName)
+        xmltag = u'<%s>%f</%s>' % (tagName, tagValue, tagName)
     else:
-        tagValue = remove_cntl_chars(tagValue)
-        xmltag = '<%s>%s</%s>\n' % (tagName, saxutils.escape(tagValue), tagName)
+        if escape:
+            tagValue = escape_xml(tagValue)
 
-    return xmltag
+        xmltag = u'<%s>%s</%s>' % (tagName, tagValue, tagName)
+    return xmltag 
 
+def escape_xml(tagvalue):
+    return saxutils.escape(tagvalue)
 
 def url_to_filename(url, catchpath, catchquery):
     htuple = urlparse.urlparse(url)
     path   = htuple[2]
-    query  = htuple[4]
 
     words = []
 
@@ -138,10 +200,10 @@ def get_tag_contents(tag):
     for content in tag.contents:
         if type(content) == NavigableString:
             retval += content
-        else:
+        elif type(content) == Tag:
             retval += ' ' + get_tag_contents(content)
 
-    return string.strip(retval)
+    return retval
 
 def tag_contents_without_recurse(tag):
     contents = []
@@ -204,52 +266,54 @@ class CourtParser(HTMLParser):
 
         return True
 
+def get_petitioner_respondent(title):
+    reobj = re.search(r'\b(vs|versus|v/s|v s)\b', title, re.IGNORECASE)
+    petitioner = None
+    respondent = None
+
+    if reobj:
+        if reobj.start() > 0:
+            petitioner = title[:reobj.start()]
+            petitioner = u' '.join(petitioner.split())
+            petitioner = petitioner.strip('.,:')
+        if reobj.end() < len(title) - 1:
+            respondent = title[reobj.end():]
+            respondent = u' '.join(respondent.split())
+            respondent = respondent.strip('.,:')
+
+    return petitioner, respondent
 
 def save_file(filepath, buf):
     h = open(filepath, 'w')
     h.write(buf)
     h.close()
-
-class Logger:
-    def __init__(self, debuglevel, filename = None, newlog = False):
-        self.debuglevel = debuglevel
-        self.lock       = threading.Lock()
- 
-        if filename:
-            if newlog:
-                opt = 'w'
-            else:
-                opt = 'a'
-            self.fhandle = open(filename, opt)
-        else:
-            self.fhandle = sys.stdout
-
-        self.ERR, self.WARN, self.NOTE = range(3)
-
-    def log(self, level, msg):
-        if level <= self.debuglevel:
-            secs = time.time()
-            self.lock.acquire()
-            self.fhandle.write('%s: %s\n' % (time.ctime(secs), msg))
-            self.lock.release()
    
 class BaseCourt:
-    def __init__(self, name, rawdir, metadir, logger):
-        self.logger      = logger
+    def __init__(self, name, rawdir, metadir, statdir, updateMeta):
         self.name        = name
         self.rawdir      = rawdir
         self.metadir     = metadir
+        self.updateMeta  = updateMeta
+
+        if self.name == 'judis.nic.in':
+            loggername = 'supremecourt'
+        else:
+            loggername = self.name
+    
+        self.logger      = logging.getLogger(u'crawler.%s' % loggername)
 
         mk_dir(self.rawdir)
         mk_dir(self.metadir)
 
         self.maxretries  = 3
 
-
-        statdir          = '%s/stats' % rawdir
-        mk_dir(statdir)
-        self.wgetlog     = '%s/wgetlog' % statdir
+        self.wgetlog     = os.path.join(statdir, '%s-wget.log' % self.name)
         self.useragent   = 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.0.10) Gecko/2009051719 Gentoo Firefox/3.0.10'
+
+        self.PETITIONER = 'petitioner'
+        self.RESPONDENT = 'respondent'
+        self.DATE       = 'date'
+        self.CASENO     = 'caseno'
 
     def sync(self, fromdate, todate):
         newdownloads = []
@@ -268,7 +332,7 @@ class BaseCourt:
             datedir   = os.path.join (self.metadir, tmprel)
             mk_dir(datedir)
 
-            self.log_debug(self.logger.NOTE, 'Date %s' % dateobj)
+            self.logger.info(u'Date %s' % dateobj)
 
             dls = self.download_oneday(tmprel, dateobj)
             newdownloads.extend(dls)
@@ -277,7 +341,7 @@ class BaseCourt:
 
     def download_url(self, url, loadcookies = None, savecookies = None, \
                      postdata = None, referer = None, stderr = None, \
-                     srvresponse = None):
+                     srvresponse = None, encodepost= True, headers = None):
         arglist = [\
                    '/usr/bin/wget', '--output-document', '-', \
                    '--tries=%d' % self.maxretries, \
@@ -292,13 +356,15 @@ class BaseCourt:
 
         if loadcookies:
             arglist.extend(['--load-cookies', loadcookies])
-
         elif savecookies:
             arglist.extend(['--keep-session-cookies', \
                             '--save-cookies', savecookies]) 
 
         if postdata:
-            encodedData = urllib.urlencode(postdata)
+            if encodepost:
+                encodedData = urllib.urlencode(postdata)
+            else:
+                encodedData = postdata
             if len(encodedData) > 100*1000:
                 postfile = tempfile.NamedTemporaryFile()
                 postfile.write(encodedData)
@@ -310,48 +376,64 @@ class BaseCourt:
         if referer:
             arglist.extend(['--referer', referer])
 
-        if self.logger.debuglevel >= self.logger.NOTE:
+        if self.logger.getEffectiveLevel() <= logging.DEBUG:
             arglist.append('--debug')
 
+        if headers:
+            for hdr in headers:
+                arglist.append('--header')
+                arglist.append(hdr)
         arglist.append(url)
 
         if stderr:
             p = subprocess.Popen(arglist, stdout = subprocess.PIPE, \
                                  stderr = subprocess.PIPE)
-            return p.communicate()
+            our, err = p.communicate()
+            return out, err
         else:
             p = subprocess.Popen(arglist, stdout = subprocess.PIPE)
-            return p.communicate()[0]
+            webpage = p.communicate()[0]
+            return webpage
 
-    def save_judgment(self, relurl, judgeurl, metainfo):
+    def save_judgment(self, relurl, judgeurl, metainfo, cookiefile = None):
         filepath = os.path.join(self.rawdir, relurl)
         metapath = os.path.join(self.metadir, relurl)
 
         if not os.path.exists(filepath):
-            doc = self.download_url(judgeurl, \
-                                    loadcookies = self.cookiefile.name)
+            if cookiefile:
+                doc = self.download_url(judgeurl, \
+                                        loadcookies = cookiefile)
+            else:
+                doc = self.download_url(judgeurl)
+               
             if doc:
                 save_file(filepath, doc)
-                self.log_debug(self.logger.NOTE, 'Saved rawfile %s' % relurl)
+                self.logger.info(u'Saved rawfile %s' % relurl)
  
         if metainfo and os.path.exists(filepath) and \
-          not os.path.exists(metapath):
-            tags = obj_to_xml('document', metainfo)
-            save_file(metapath, tags)
-            self.log_debug(self.logger.NOTE, 'Saved metainfo %s' % relurl)
+                (self.updateMeta or not os.path.exists(metapath)):
+            print_tag_file(metapath, metainfo)
+            self.logger.info(u'Saved metainfo %s' % relurl)
 
         if os.path.exists(filepath):
             return relurl
         else:
             return None
 
-    def log_debug(self, level, s):
-        msg = self.name
-        if level == self.logger.ERR:
-           msg += '-ERR'
-        elif level == self.logger.WARN:
-           msg += '-WARN'
-        elif level == self.logger.NOTE:
-           msg += '-NOTE'
-        msg = '%s: %s' % (msg, s)
-        self.logger.log(level, msg)
+def get_file_type(filepath):
+    m = magic.open(magic.MAGIC_MIME)
+    #m = magic.open(magic.MIME_TYPE)
+    m.load()
+    mtype = m.file(filepath)
+    m.close()
+
+    return mtype
+
+def get_buffer_type(buffer):
+    m = magic.open(magic.MAGIC_MIME)
+    #m = magic.open(magic.MIME_TYPE)
+    m.load()
+    mtype = m.buffer(buffer)
+    m.close()
+
+    return mtype

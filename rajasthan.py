@@ -5,8 +5,8 @@ import urllib
 import re
 
 class Rajasthan(Courtnic):
-    def __init__(self, name, rawdir, metadir, logger):
-        Courtnic.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        Courtnic.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.courturl  = urllib.basejoin(self.baseurl, '/rajasthan/')
         self.cookieurl = urllib.basejoin(self.courturl, '/content.asp')
 

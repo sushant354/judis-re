@@ -4,8 +4,8 @@ import os
 import re
 
 class Jharkhand(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://jhr.nic.in'
 
     def get_meta_info(self, title, dateobj):
@@ -24,20 +24,17 @@ class Jharkhand(utils.BaseCourt):
                     ('m2', dateobj.month), ('y2', dateobj.year), \
                     ('button', 'Submit')]
 
-        encodedData  = urllib.urlencode(postdata)
-
         webpage = self.download_url(dateurl, postdata = postdata)
 
         if not webpage:
-            self.log_debug(self.logger.WARN, 'No webpage for %s date: %s' % \
-                                                            (dateurl, dateobj))
+            self.logger.warning(u'No webpage for %s date: %s' % \
+                                 (dateurl, dateobj))
             return []
 
         d = utils.parse_webpage(webpage)
 
         if not d:
-            self.log_debug(self.logger.ERR, 'HTML parsing failed for date: %s' % 
-                                      dateobj)
+            self.logger.error(u'HTML parsing failed for date: %s' %  dateobj)
             return []
 
         newdls = []
@@ -47,7 +44,7 @@ class Jharkhand(utils.BaseCourt):
             title = utils.get_tag_contents(link)
 
             if (not href) or (not title):
-                self.log_debug(self.logger.WARN, 'Could not process %s' % link)
+                self.logger.warning(u'Could not process %s' % link)
                 continue
 
             words = href.split('/')
@@ -55,8 +52,7 @@ class Jharkhand(utils.BaseCourt):
 
             url = urllib.basejoin(dateurl, href)
 
-            self.log_debug(self.logger.NOTE, 'link: %s title: %s' % \
-                                      (href, title))
+            self.logger.info(u'link: %s title: %s' % (href, title))
 
             relurl = os.path.join (relpath, filename)
             filepath = os.path.join(self.rawdir, relurl)
@@ -66,16 +62,16 @@ class Jharkhand(utils.BaseCourt):
                 webpage = self.download_url(url)
 
                 if not webpage:
-                    self.log_debug(self.logger.WARN, 'No webpage %s' % url)
+                    self.logger.warning(u'No webpage %s' % url)
                 else:
                     utils.save_file(filepath, webpage)
-                    self.log_debug(self.logger.NOTE, 'Saved %s' % url)
+                    self.logger.info(u'Saved %s' % url)
                     newdls.append(relurl)
 
-            if os.path.exists(filepath) and not os.path.exists(metapath):
+            if os.path.exists(filepath) and \
+                    (self.updateMeta or not os.path.exists(metapath)):
                 metainfo = self.get_meta_info(title, dateobj)
                 if metainfo:
-                    tags = utils.obj_to_xml('document', metainfo)
-                    utils.save_file(metapath, tags)
+                    utils.print_tag_file(metapath, metainfo)
 
         return newdls     

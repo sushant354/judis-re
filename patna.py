@@ -7,9 +7,9 @@ import string
 import os
 
 class Patna(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
-        self.baseurl = 'http://phc.gov.in'
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.baseurl = 'http://patnahighcourt.bih.nic.in'
         self.dateurl = urllib.basejoin(self.baseurl, \
                                        '/judgment/judgDateWise.aspx')
         self.formaction = 'judgDateWise.aspx'
@@ -46,7 +46,7 @@ class Patna(utils.BaseCourt):
 
     def get_judgment(self, relpath, postdata, href, metainfo):
         if not metainfo.has_key('title'):
-            self.log_debug(self.logger.WARN, 'No title found for %s' % href)
+            self.logger.warning(u'No title found for %s' % href)
             return None
  
         filename = self.get_filename(metainfo['title'])
@@ -57,12 +57,16 @@ class Patna(utils.BaseCourt):
         if not os.path.exists(rawpath):
             judgment = self.download_link(postdata, href)
             if judgment:
-                self.log_debug(self.logger.NOTE, 'Downloaded %s' % relurl)        
-                utils.save_file(rawpath, judgment)
+                mtype = utils.get_buffer_type(judgment)
+                if re.match('text/html', mtype):
+                    self.logger.warning(u'Err in downloading %s: Directed to a default website' % relurl)
+                else: 
+                    self.logger.info(u'Downloaded %s' % relurl) 
+                    utils.save_file(rawpath, judgment)
             else:
-                self.log_debug(self.logger.NOTE, 'Could not download %s' % relurl)        
+                self.logger.info(u'Could not download %s' % relurl)        
         if os.path.exists(rawpath):
-            if metainfo and not os.path.exists(metapath):
+            if metainfo and (self.updateMeta or not os.path.exists(metapath)):
                 tags = utils.obj_to_xml('document', metainfo)
                 utils.save_file(metapath, tags)
 
@@ -92,7 +96,7 @@ class Patna(utils.BaseCourt):
 
         parsedobj = utils.parse_webpage(webpage)
         if not parsedobj:
-            self.log_debug(self.logger.ERR, 'Could not parse the result page')
+            self.logger.error(u'Could not parse the result page')
             return newdls
 
         tables = parsedobj.findAll('table')
@@ -103,7 +107,7 @@ class Patna(utils.BaseCourt):
                 rtable = table
 
         if not rtable:
-            self.log_debug(self.logger.ERR, 'Result table not found')
+            self.logger.error(u'Result table not found')
             return newdls
 
         postdata = self.get_post_data(parsedobj, dateobj)
@@ -127,15 +131,13 @@ class Patna(utils.BaseCourt):
         # check if we need to recurse 
         if pageblock:
             if nextlink:
-                self.log_debug(self.logger.NOTE, 'Recursing after pagnum %d' % \
-                                          (pagenum+1))
+                self.logger.info(u'Recursing after pagnum %d' %  (pagenum+1))
                 self.download_url(self.cookieurl, savecookies = self.cookiefile.name)
                 webpage = self.download_link(postdata, nextlink['href'])
                 newdls.extend(self.result_page(relpath, webpage, \
                                                dateobj, pagenum + 1))
             else:
-                self.log_debug(self.logger.NOTE, 'Last page %d. No more recursing'\
-                                               % pagenum)
+                self.logger.info(u'Last page %d. No more recursing' % pagenum)
 
         return newdls
 
@@ -151,9 +153,9 @@ class Patna(utils.BaseCourt):
                 judgehref = href
             
         if not judgehref:
-            self.log_debug(self.logger.NOTE, 'No download link in %s' % tr) 
+            self.logger.info(u'No download link in %s' % tr) 
         else:
-            self.log_debug(self.logger.NOTE, 'Processing %s' % judgehref)
+            self.logger.info(u'Processing %s' % judgehref)
             metainfo = self.get_meta_info(tr, dateobj)
             relurl = self.get_judgment(relpath, postdata, judgehref, metainfo)
 
@@ -198,7 +200,7 @@ class Patna(utils.BaseCourt):
                                     loadcookies = self.cookiefile.name)
         parsedobj = utils.parse_webpage(webpage)
         if not parsedobj:
-            self.log_debug(self.logger.ERR, 'Could not parse the date search page')
+            self.logger.error(u'Could not parse the date search page')
             return []
 
         postdata = self.get_post_data(parsedobj, dateobj)

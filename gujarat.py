@@ -5,8 +5,8 @@ import os
 import urllib
 
 class Gujarat(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://gujarathc-casestatus.nic.in/'
         self.cookiefile  = tempfile.NamedTemporaryFile()
         self.agree_to_tc()
@@ -14,9 +14,9 @@ class Gujarat(utils.BaseCourt):
     def agree_to_tc(self):
         postdata = [('agree', 'Y')]
         tcurl = urllib.basejoin(self.baseurl, '/gujarathc/validPageChk.jsp')
-        webpage = self.download_url(tcurl, \
-                                    savecookies = self.cookiefile.name, \
-                                    postdata    = postdata)
+        self.download_url(tcurl, \
+                          savecookies = self.cookiefile.name, \
+                          postdata    = postdata)
 
     def sanitize_windowopen(self, reobj):
         groupdict = reobj.groupdict()
@@ -35,7 +35,7 @@ class Gujarat(utils.BaseCourt):
                                      loadcookies = self.cookiefile.name)
 
         if not webpage:
-            self.log_debug(self.logger.WARN, 'No webpage for %s' % dateurl)            
+            self.logger.warning(u'No webpage for %s' % dateurl)            
             return newdls
 
         webpage = re.sub('(?P<windowopen>window.open\([^)]+\))', \
@@ -44,19 +44,19 @@ class Gujarat(utils.BaseCourt):
         d = utils.parse_webpage(webpage)
 
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse html of the result page for date %s' % dateobj)
+            self.logger.error(u'Could not parse html of the result page for date %s' % dateobj)
             return newdls
 
         trs = d.findAll('tr')
         for tr in trs:
             link = tr.find('a')
             if not link:
-                self.log_debug(self.logger.NOTE, 'No link in %s' % tr)
+                self.logger.info(u'No link in %s' % tr)
                 continue
 
             href = link.get('onclick')
             if not href:
-                self.log_debug(self.logger.NOTE, 'No href in %s' % tr)
+                self.logger.info(u'No href in %s' % tr)
                 continue
 
             reobj = re.search("showoj.jsp?[^'\s]+", href)
@@ -70,28 +70,28 @@ class Gujarat(utils.BaseCourt):
                                                           'casetype'])
 
             if not filename:
-                self.log_debug(self.logger.ERR, 'Could not get filename for %s' % url)
+                self.logger.error(u'Could not get filename for %s' % url)
                 continue
             relurl   = os.path.join(relpath, filename)
             filepath = os.path.join(self.rawdir, relurl)
             metapath = os.path.join(self.metadir, relurl)
 
             if not os.path.exists(filepath):
-                self.log_debug(self.logger.NOTE, 'Downloading %s %s' % (url, filename))
+                self.logger.info(u'Downloading %s %s' % (url, filename))
                 j = self.download_url(url, loadcookies = self.cookiefile.name)
                  
                 if not j:
-                    self.log_debug(self.logger.WARN, 'No webpage: %s' % url)
+                    self.logger.warning(u'No webpage: %s' % url)
                 else:
-                    self.log_debug(self.logger.NOTE, 'Saving %s' % filepath)
+                    self.logger.info(u'Saving %s' % filepath)
                     utils.save_file(filepath, j)
                     newdls.append(relurl)
            
-            if os.path.exists(filepath) and not os.path.exists(metapath):
+            if os.path.exists(filepath) and \
+                    (self.updateMeta or not os.path.exists(metapath)):
                 metainfo = self.get_meta_info(link, tr, dateobj)
                 if metainfo:
-                    tags = utils.obj_to_xml('document', metainfo)
-                    utils.save_file(metapath, tags)
+                    utils.print_tag_file(metapath, metainfo)
 
         return newdls
 

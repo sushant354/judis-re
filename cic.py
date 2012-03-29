@@ -1,13 +1,12 @@
 import tempfile
 import urllib
-import re
 import os
 
 import utils
 
 class CIC(utils.BaseCourt):
-    def __init__(self, name, rawdir, metadir, logger):
-        utils.BaseCourt.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://rti.india.gov.in'
 
         self.dateurl = urllib.basejoin(self.baseurl, \
@@ -62,9 +61,10 @@ class CIC(utils.BaseCourt):
                 relurl = os.path.join(relpath, relurl)
                 relurl = self.save_judgment(relurl, \
                                          urllib.basejoin(self.posturl, href), \
-                                         metainfo)
+                                         metainfo, \
+                                         cookiefile = self.cookiefile.name)
             else:
-                self.log_debug(self.logger.WARN, 'No casenum in %s' % tr)
+                self.logger.warning(u'No casenum in %s' % tr)
 
         return relurl
 
@@ -80,8 +80,7 @@ class CIC(utils.BaseCourt):
         dls = []
         d = utils.parse_webpage(resultpage)
         if not d:
-            self.log_debug(self.logger.ERR, 'Could not parse result page %s' % \
-                                             dateobj)
+            self.logger.error(u'Could not parse result page %s' % dateobj)
 
         # download judgments
         trs = d.findAll('tr')
@@ -92,7 +91,7 @@ class CIC(utils.BaseCourt):
                 if relurl:
                     dls.append(relurl)
             else:
-                self.log_debug(self.logger.WARN, 'No action for %s' % tr)
+                self.logger.warning(u'No action for %s' % tr)
 
         # next page
         links = d.findAll('a')
@@ -104,8 +103,7 @@ class CIC(utils.BaseCourt):
                 resultpage = self.download_url(nexturl, \
                                             loadcookies = self.cookiefile.name)
                 if resultpage:
-                    self.log_debug(self.logger.NOTE, 'Recursing  to %s' % \
-                                                     nexturl)
+                    self.logger.info(u'Recursing  to %s' % nexturl)
                     dls.extend(self.handle_result_page(resultpage, relpath, \
                                                        dateobj))
         return dls  

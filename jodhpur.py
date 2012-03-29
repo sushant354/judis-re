@@ -3,11 +3,10 @@ import utils
 import string
 import urllib
 import re
-import urlparse
 
 class Jodhpur(Courtnic):
-    def __init__(self, name, rawdir, metadir, logger):
-        Courtnic.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        Courtnic.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.cookieurl = 'http://courtnic.nic.in/jodh/content.asp'
         self.courturl  = urllib.basejoin(self.baseurl, '/jodh/')
  

@@ -3,8 +3,8 @@ import urllib
 import utils
 
 class Uttaranchal(lobis.Lobis):
-    def __init__(self, name, rawdir, metadir, logger):
-        lobis.Lobis.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        lobis.Lobis.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl   = 'http://lobis.nic.in/'
         self.courturl  = urllib.basejoin(self.baseurl, '/uhc')
         self.cookieurl = urllib.basejoin(self.baseurl, '/uhc/juddt.php?scode=35')

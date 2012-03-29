@@ -6,8 +6,8 @@ from patna import Patna
 import datetime
 
 class PatnaOrders(Patna):
-    def __init__(self, name, rawdir, metadir, logger):
-        Patna.__init__(self, name, rawdir, metadir, logger)
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        Patna.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.dateurl = urllib.basejoin(self.baseurl, \
                                        '/judgment/OrdrDateWise.aspx')
         self.formaction = 'OrdrDateWise.aspx'
