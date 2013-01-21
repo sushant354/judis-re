@@ -8,6 +8,7 @@ class CourtListing(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.mainurls = []
+        self.INFO_ORDERED = True
 
     def download_info_page(self, url):
         return [], None
@@ -47,8 +48,13 @@ class CourtListing(utils.BaseCourt):
         newdls = []
         found = False
         finished = False
+        infoWithDate = []
         for info in infolist: 
             if info.has_key(self.DATE):
+                infoWithDate.append(info)
+
+        infoWithDate.sort(cmp = lambda x, y: cmp(x[self.DATE], y[self.DATE]))
+        for info in infoWithDate:
                 dateobj = info[self.DATE]
                 if dateobj >= fromdate and dateobj <= todate:
                     found = True
@@ -66,7 +72,7 @@ class CourtListing(utils.BaseCourt):
                         newdls.append(relurl)
                 elif found:
                     finished = True
-        if not finished or not found:
+        if not finished or not found or not self.INFO_ORDERED:
             return False, newdls
         else:
             return True, newdls

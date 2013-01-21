@@ -15,6 +15,9 @@ import logging
 import codecs
 import magic
 import calendar
+import math
+import random
+import time
 
 from HTMLParser import HTMLParser, HTMLParseError
 from BeautifulSoup import BeautifulSoup, NavigableString, Tag
@@ -284,7 +287,7 @@ def get_petitioner_respondent(title):
     return petitioner, respondent
 
 def save_file(filepath, buf):
-    h = open(filepath, 'w')
+    h = open(filepath, 'wb')
     h.write(buf)
     h.close()
    
@@ -314,6 +317,8 @@ class BaseCourt:
         self.RESPONDENT = 'respondent'
         self.DATE       = 'date'
         self.CASENO     = 'caseno'
+
+        self.randomObj = random.Random()
 
     def sync(self, fromdate, todate):
         newdownloads = []
@@ -360,6 +365,9 @@ class BaseCourt:
             arglist.extend(['--keep-session-cookies', \
                             '--save-cookies', savecookies]) 
 
+        sleepDuration = math.fabs(self.randomObj.normalvariate(2, 2))
+        time.sleep(sleepDuration)
+
         if postdata:
             if encodepost:
                 encodedData = urllib.urlencode(postdata)
@@ -388,7 +396,7 @@ class BaseCourt:
         if stderr:
             p = subprocess.Popen(arglist, stdout = subprocess.PIPE, \
                                  stderr = subprocess.PIPE)
-            our, err = p.communicate()
+            out, err = p.communicate()
             return out, err
         else:
             p = subprocess.Popen(arglist, stdout = subprocess.PIPE)

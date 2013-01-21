@@ -22,7 +22,7 @@ class Patna(utils.BaseCourt):
         filename = re.sub('/', '|', title)
         filename = re.sub("'", ' ', filename)
         words    = filename.split()
-        return string.join(words, '_')
+        return '_'.join(words)
 
     def download_link(self, postdata, href):
         plist = []
@@ -50,6 +50,10 @@ class Patna(utils.BaseCourt):
             return None
  
         filename = self.get_filename(metainfo['title'])
+        if not filename:
+            self.logger.warning(u'No filename for %s' % href)
+            return None
+
         relurl   = os.path.join(relpath, filename)
         rawpath  = os.path.join(self.rawdir, relurl)
         metapath = os.path.join(self.metadir, relurl)
