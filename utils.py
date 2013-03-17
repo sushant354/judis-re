@@ -88,8 +88,11 @@ def check_next_page(tr, pagenum):
         return False, None
 
     for link in links:
-        contents = get_tag_contents(link) 
-        if not contents or not re.match('[\d.]+$', contents):
+        contents = get_tag_contents(link)
+        if not contents:
+            continue
+        contents = contents.strip()
+        if  not re.match('[\d.]+$', contents):
             return False, None
 
     pageblock = True

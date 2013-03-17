@@ -85,7 +85,7 @@ if __name__ == '__main__':
     todate   = None
     srclist  = []
 
-    debuglevel = 0
+    debuglevel = 3 
     progname = sys.argv[0]
     filename = None
     updateMeta = False
@@ -143,7 +143,7 @@ if __name__ == '__main__':
               'rajasthan'     : rajasthan.Rajasthan,         \
               'jodhpur'       : jodhpur.Jodhpur,             \
               'karnataka'     : karnataka.Karnataka,         \
-              'supremecourt'  : supremecourt.SupremeCourt,   \
+              'supremecourt'  : supremecourt.NewSC,          \
               'patna'         : patna.Patna,                 \
               'patna_orders'  : patna_orders.PatnaOrders,    \
               'allahabad'     : allahabad.Allahabad,         \

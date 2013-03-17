@@ -2,6 +2,7 @@ import os
 import re
 import string
 import tempfile
+import urllib
 
 import utils
 
@@ -147,7 +148,7 @@ class SupremeCourt(utils.BaseCourt):
             metapath = os.path.join (self.metadir, tmprel)
 
             if not os.path.exists(rawpath):
-                webpage = self.download_link(link)
+                webpage = self.download_judgment(link)
                 if webpage:
                     utils.save_file(rawpath, webpage)
                 else:
@@ -211,6 +212,9 @@ class SupremeCourt(utils.BaseCourt):
        linkRe = "javascript:__doPostBack\('(?P<event_target>[^']+)','(?P<event_arg>[^']*)'\)"
        return re.search(linkRe, linkname)
 
+    def download_judgment(self, link):
+        return self.download_link(link)
+
     def download_link(self, link):
         linkinfo = self.parse_link(link['href'])
         if linkinfo == None:
@@ -224,4 +228,60 @@ class SupremeCourt(utils.BaseCourt):
                         ('__EVENTARGUMENT', linkinfo.group('event_arg'))])
 
         return self.download_webpage(postdata, self.webformUrl)
+
+class NewSC(SupremeCourt):
+    def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
+        SupremeCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+
+    def download_judgment(self, link):
+        return self.download_url(link['href'])
+
+    def get_judgment_info(self, tr):
+        links = tr.findAll('a')
+        judgedict = {}
+        for link in links:
+            href = link.get('href')
+            if href and re.search('imgst.aspx', href):
+                judgedict['href'] = urllib.basejoin(self.webformUrl, href)
+
+        tds = tr.findAll('td')
+        maxTxt = ''
+        for td in tds:
+            txt = utils.get_tag_contents(td)
+            if not txt:
+                continue
+            txt = txt.strip()
+            reobj = re.search('Coram\s*:', txt)
+            if reobj and reobj.end() + 1 < len(txt):
+                bench = txt[reobj.end() + 1:]
+                judgedict['bench'] = bench
+            else:
+                reobj = re.search(' vs\.? ', txt, re.IGNORECASE)
+                if reobj:
+                    judgedict['title'] = txt
+                    judgedict['petitioner'] = txt[:reobj.start()] 
+                    judgedict['respondent'] = txt[reobj.end():]
+                elif len(maxTxt) < len(txt):
+                    maxTxt = txt
+        if not judgedict.has_key('title') and maxTxt:
+            judgedict['title'] = maxTxt            
+        return judgedict
+
+    def extract_links(self, prsdobj, pagenum):
+        linkdict = {'docs': []}
+ 
+        trs =  prsdobj.findAll('tr')
+        for tr in trs:
+            if tr.find('tr'):
+                continue
+
+            pageblock, nextlink = utils.check_next_page(tr, pagenum)
+            if nextlink:
+                linkdict['next'] = nextlink
+            elif not pageblock:
+                link = self.get_judgment_info(tr)
+                if link:
+                    linkdict['docs'].append(link)
+
+        return linkdict
 
