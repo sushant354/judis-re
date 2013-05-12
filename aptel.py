@@ -10,6 +10,7 @@ class Aptel(CourtListing):
 
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         CourtListing.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.hostname = 'aptel.gov.in'
         self.mainurls = [u'http://aptel.gov.in/judgementnew.html']
 
     def get_meta_info(self, tr):

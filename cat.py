@@ -7,6 +7,7 @@ class CatDelhi(supremecourt.SupremeCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         supremecourt.SupremeCourt.__init__(self, name, rawdir, \
                                            metadir, statsdir, updateMeta)
+        self.hostname = 'judis.nic.in'
         self.webformUrl = 'http://judis.nic.in/judis_cat/chrseq.aspx'
         self.dateqryUrl = 'http://judis.nic.in/judis_cat/Doj_Qry.aspx'
         self.statevalNames = ['__VIEWSTATE', '__EVENTVALIDATION', '__ncforminfo']
@@ -73,7 +74,7 @@ class CatDelhi(supremecourt.SupremeCourt):
         grid   = None
         for table in tables:
             className = table.get('class')
-            if className == 'Grid':
+            if className and className[0] == 'Grid':
                 grid = table
                 break
         if grid:

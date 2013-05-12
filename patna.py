@@ -10,6 +10,7 @@ class Patna(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://patnahighcourt.bih.nic.in'
+        self.hostname = 'patnahighcourt.bih.nic.in'
         self.dateurl = urllib.basejoin(self.baseurl, \
                                        '/judgment/judgDateWise.aspx')
         self.formaction = 'judgDateWise.aspx'

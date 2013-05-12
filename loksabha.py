@@ -8,6 +8,7 @@ import utils
 
 class LokSabhaUrl:
     def __init__(self):
+        self.hostname = '164.100.47.132'
         baseurl = 'http://164.100.47.132/LssNew/psearch/'
         date2num = {\
             (datetime.date(1998, 03, 23),      \

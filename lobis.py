@@ -9,6 +9,7 @@ class Lobis(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.cookiefile  = tempfile.NamedTemporaryFile()
+        self.hostname    = 'lobis.nic.in'
 
     def get_cookies(self):
         self.download_url(self.cookieurl, savecookies = self.cookiefile.name)

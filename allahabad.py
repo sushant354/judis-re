@@ -7,6 +7,7 @@ import os
 class Allahabad(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.hostname = 'elegalix.allahabadhighcourt.in'
         self.baseurl = 'http://elegalix.allahabadhighcourt.in'
         self.dateurl = urllib.basejoin(self.baseurl, '/elegalix/WebStartJudgmentDateSearch.do')
         self.cookiefile  = tempfile.NamedTemporaryFile()

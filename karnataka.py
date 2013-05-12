@@ -8,6 +8,7 @@ class Karnataka(utils.BaseCourt):
     def __init__(self, srcdir, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, srcdir, rawdir, metadir, statsdir, updateMeta)
         self.baseurl  = 'http://judgmenthck.kar.nic.in'
+        self.hostname  = 'judgmenthck.kar.nic.in'
         self.courturl = urllib.basejoin(self.baseurl, '/judgments/')
         self.cookiefile = tempfile.NamedTemporaryFile()
         self.get_cookies()

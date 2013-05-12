@@ -9,6 +9,7 @@ class Bombay(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.baseurl = 'http://bombayhighcourt.nic.in'
+        self.hostname = 'bombayhighcourt.nic.in'
         self.cookiefile  = tempfile.NamedTemporaryFile()
 
     def get_cookies(self):

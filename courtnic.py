@@ -11,6 +11,7 @@ class Courtnic(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
 
+        self.hostname   = 'courtnic.nic.in'
         self.baseurl    = 'http://courtnic.nic.in/'
         self.cookiefile = tempfile.NamedTemporaryFile()        
 

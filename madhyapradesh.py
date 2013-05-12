@@ -9,6 +9,7 @@ class MadhyaPradesh(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
         self.cookiefile  = tempfile.NamedTemporaryFile()
+        self.hostname = 'ldemo.mp.nic.in'
         self.baseurl = 'http://ldemo.mp.nic.in'
         self.cookieurl = urllib.basejoin(self.baseurl, \
                                          'causelist/ciskiosk/ordermain.php')

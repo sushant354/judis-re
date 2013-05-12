@@ -20,7 +20,7 @@ import random
 import time
 
 from HTMLParser import HTMLParser, HTMLParseError
-from BeautifulSoup import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 monthre = 'january|february|march|april|may|june|july|august|september|october|november|december|frbruary|februay'
 
@@ -113,7 +113,7 @@ def check_next_page(tr, pagenum):
 
 def parse_webpage(webpage):
     try:
-        d = BeautifulSoup(webpage, convertEntities=BeautifulSoup.HTML_ENTITIES)
+        d = BeautifulSoup(webpage, 'html5lib')
         return d
     except:
         return None
@@ -296,6 +296,7 @@ def save_file(filepath, buf):
    
 class BaseCourt:
     def __init__(self, name, rawdir, metadir, statdir, updateMeta):
+        self.hostname    = None
         self.name        = name
         self.rawdir      = rawdir
         self.metadir     = metadir
@@ -368,8 +369,8 @@ class BaseCourt:
             arglist.extend(['--keep-session-cookies', \
                             '--save-cookies', savecookies]) 
 
-        sleepDuration = math.fabs(self.randomObj.normalvariate(2, 2))
-        time.sleep(sleepDuration)
+        #sleepDuration = math.fabs(self.randomObj.normalvariate(2, 2))
+        #time.sleep(sleepDuration)
 
         if postdata:
             if encodepost:

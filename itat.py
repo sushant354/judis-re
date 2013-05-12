@@ -11,6 +11,7 @@ class ItatDelhi(utils.BaseCourt):
         
         self.zone        = 'DELHI'
         self.city        = 'DEL'
+        self.hostname    = 'itatonline.in:8080'
         self.host        = 'http://www.itatonline.in:8080'
         self.datepath    = '/itat/jsp/runBirt2.jsp'
         self.cookiefile  = tempfile.NamedTemporaryFile()

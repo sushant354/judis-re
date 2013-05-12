@@ -7,6 +7,7 @@ class Kolkata(supremecourt.SupremeCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         supremecourt.SupremeCourt.__init__(self, name, rawdir, \
                                            metadir, statsdir, updateMeta)
+        self.hostname   = 'judis.nic.in'
         self.webformUrl = 'http://judis.nic.in/Judis_Kolkata/chrseq.aspx'
         self.dateqryUrl = 'http://judis.nic.in/Judis_Kolkata/Dt_Of_JudQry.aspx'
         self.dataTypes = ['O', 'J']

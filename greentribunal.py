@@ -6,7 +6,9 @@ import utils
 class GreenTribunal(CourtListing):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         CourtListing.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.hostname = u'greentribunal.in'
         self.mainurls = [u'http://www.greentribunal.in/judgement.php']
+     
         self.INFO_ORDERED = False
 
     def get_next_page(self, d, baseurl):

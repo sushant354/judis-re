@@ -11,6 +11,7 @@ class SupremeCourt(utils.BaseCourt):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
 
         self.cookiefile  = tempfile.NamedTemporaryFile()
+        self.hostname    = 'judis.nic.in'
         self.webformUrl  = 'http://judis.nic.in/supremecourt/Chrseq.aspx'
         self.dateqryUrl  = 'http://judis.nic.in/supremecourt/DateQry.aspx' 
 
@@ -201,6 +202,7 @@ class SupremeCourt(utils.BaseCourt):
         if d:
             return self.extract_state(d)
         else:
+            self.logger.error(u'Could not parse the date webpage')
             return None
 
     def download_webpage(self, postdata, posturl):

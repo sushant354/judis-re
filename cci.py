@@ -5,6 +5,7 @@ import urllib
 class Cci(CourtListing):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         CourtListing.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.hostname = 'cci.gov.in'
         self.mainurls = [ \
         u'http://www.cci.gov.in/index.php?option=com_content&task=view&id=150',
         u'http://www.cci.gov.in/index.php?option=com_content&task=view&id=171' \

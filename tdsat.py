@@ -5,6 +5,7 @@ from courtlisting import CourtListing
 class Tdsat(CourtListing):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         CourtListing.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.hostname = 'tdsat.nic.in'
         self.mainurls = [u'http://www.tdsat.nic.in/judgements.htm']
 
     def get_meta_info(self, tr):

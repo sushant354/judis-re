@@ -7,6 +7,7 @@ import utils
 class CIC(utils.BaseCourt):
     def __init__(self, name, rawdir, metadir, statsdir, updateMeta = False):
         utils.BaseCourt.__init__(self, name, rawdir, metadir, statsdir, updateMeta)
+        self.hostname = 'rti.india.gov.in'
         self.baseurl = 'http://rti.india.gov.in'
 
         self.dateurl = urllib.basejoin(self.baseurl, \
