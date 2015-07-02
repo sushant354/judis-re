@@ -1,0 +1,1 @@
+Indian high court website do not provide an easy way interface to download judgments. The major problems are discussed <a href='http://lawandotherthings.blogspot.com/2009/02/e-legal-government-efforts-shortcomings.html'>here</a>. This project aims to circumvent those problems by reverse engineering these websites and providing an easy interface for downloading court judgments.
